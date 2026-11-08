@@ -1,0 +1,193 @@
+<title>Satisfying Search</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one working column — scenario, verdict, levers, then the wide clock table that scrolls on its own. */
+:root {
+  --bg: #f3f4f1;
+  --panel: #ffffff;
+  --ink: #1d2422;
+  --muted: #5e6a66;
+  --line: #d5dad6;
+  --accent: #0f6e68;        /* lattice teal */
+  --accent-soft: #dcefec;
+  --good: #1f7a3e; --good-bg: #e2f2e7;
+  --warn: #9a5b00; --warn-bg: #fbefd9;
+  --bad: #b3261e;  --bad-bg: #fbe4e1;
+  --d0: #0f6e68; --d1: #3f8f87; --d2: #7aa9a2; --d3: #b08a3e; --d4: #b8652b;
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121615; --panel: #1a201e; --ink: #e3e8e5; --muted: #95a29d; --line: #2e3734;
+  --accent: #4fc0b5; --accent-soft: #1d3633;
+  --good: #6fcf8f; --good-bg: #173322; --warn: #e6b45c; --warn-bg: #3a2c12; --bad: #f08a80; --bad-bg: #3d1a17;
+  --d0: #4fc0b5; --d1: #6fb3aa; --d2: #8fa9a3; --d3: #d0aa5a; --d4: #e08a50;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #121615; --panel: #1a201e; --ink: #e3e8e5; --muted: #95a29d; --line: #2e3734;
+  --accent: #4fc0b5; --accent-soft: #1d3633;
+  --good: #6fcf8f; --good-bg: #173322; --warn: #e6b45c; --warn-bg: #3a2c12; --bad: #f08a80; --bad-bg: #3d1a17;
+  --d0: #4fc0b5; --d1: #6fb3aa; --d2: #8fa9a3; --d3: #d0aa5a; --d4: #e08a50;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-body); }
+.wrap { max-width: 1320px; margin: 0 auto; padding-block: 20px 60px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 18px; }
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; border-bottom: 2px solid var(--ink); padding-bottom: 10px; }
+h1 { font: 700 30px/1.1 var(--font-display); letter-spacing: 0.01em; margin: 0; text-wrap: balance; }
+h1 .sub { font-weight: 500; color: var(--muted); font-size: 18px; margin-left: 8px; }
+h2 { font: 600 20px/1.2 var(--font-display); margin: 0 0 8px; letter-spacing: 0.02em; text-wrap: balance; }
+h3 { font: 600 15px/1.2 var(--font-display); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 6px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; min-width: 0; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+code, .num, .mono { font-family: var(--font-mono); font-size: 12.5px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+p { margin: 6px 0; max-width: 78ch; }
+button, select, input { font: inherit; font-size: 13px; color: var(--ink); }
+input, select { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 2px 5px; }
+button { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 3px 9px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); font-weight: 600; padding: 6px 14px; }
+button.x { border: none; background: none; color: var(--muted); padding: 0 4px; }
+button.x:hover { color: var(--bad); }
+a { color: var(--accent); }
+.status { font: 600 14px/1.3 var(--font-body); padding: 4px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+.status.good { background: var(--good-bg); color: var(--good); }
+.status.warn { background: var(--warn-bg); color: var(--warn); }
+.status.bad { background: var(--bad-bg); color: var(--bad); }
+.status.working::before { content: "⟳ "; display: inline-block; }
+@media (prefers-reduced-motion: no-preference) { .status.working::before { animation: spin 1.2s linear infinite; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+body.busy .panel button { pointer-events: none; opacity: 0.6; }
+.good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.grid3 section { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+table { border-collapse: collapse; }
+table.mini td { padding: 2px 6px 2px 0; vertical-align: middle; }
+.preset { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.optgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 6px 16px; margin: 8px 0; }
+.chip { display: inline-flex; align-items: center; gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 99px; padding: 1px 8px; font-size: 13px; margin: 2px 0; }
+details.opts summary { cursor: pointer; color: var(--accent); margin-top: 6px; }
+textarea { width: 100%; font: 12px/1.4 var(--font-mono); background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; margin-top: 8px; box-sizing: border-box; }
+.callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 8px 12px; border-radius: 0 var(--r) var(--r) 0; margin-top: 10px; }
+.callout.bad { border-color: var(--bad); background: var(--bad-bg); }
+.callout.warn { border-color: var(--warn); background: var(--warn-bg); }
+.callout code { white-space: normal; word-break: break-word; }
+table.kv th { text-align: left; font: 600 13px var(--font-display); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 3px 14px 3px 0; vertical-align: top; white-space: nowrap; }
+table.kv td { padding: 3px 0; }
+.scroll { overflow-x: auto; }
+table.levers, table.clocks { width: 100%; font-size: 13.5px; }
+table.levers th, table.clocks th { text-align: left; font: 600 12px var(--font-display); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-bottom: 1px solid var(--ink); padding: 4px 8px 4px 0; white-space: nowrap; }
+table.levers td, table.clocks td { border-bottom: 1px solid var(--line); padding: 4px 8px 4px 0; vertical-align: top; }
+table.clocks td.name { min-width: 220px; }
+table.clocks td.name a { color: var(--ink); text-decoration: none; }
+table.clocks td.name a:hover { color: var(--accent); text-decoration: underline; }
+tr.group td { font: 600 13px var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); padding-top: 14px; border-bottom: 1px solid var(--accent); }
+tr.pinned td { background: var(--accent-soft); }
+tr.detail td { background: var(--bg); padding: 8px 12px; }
+tr.derived td { color: var(--muted); }
+tr.derived td b { color: var(--ink); }
+ul.rel { margin: 4px 0; padding-left: 18px; columns: 2 320px; }
+.tag { font: 600 10px var(--font-display); text-transform: uppercase; letter-spacing: 0.08em; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; color: var(--muted); }
+button.nice { font-family: var(--font-mono); font-size: 12px; padding: 1px 6px; margin: 0 3px 3px 0; border-width: 1px 1px 1px 4px; }
+button.pin.on { border-color: var(--accent); }
+input.pinin { width: 6em; }
+td.dec-0, td.dec-1, td.dec-2, td.dec-3, td.dec-4, td.dec-bad { font: 600 13px var(--font-mono); text-align: center; }
+.dec-0 { color: var(--d0); border-left-color: var(--d0) !important; }
+.dec-1 { color: var(--d1); border-left-color: var(--d1) !important; }
+.dec-2 { color: var(--d2); border-left-color: var(--d2) !important; }
+.dec-3 { color: var(--d3); border-left-color: var(--d3) !important; }
+.dec-4 { color: var(--d4); border-left-color: var(--d4) !important; }
+.dec-bad { color: var(--bad); }
+tr.ok td { color: var(--good); }
+.hidden { display: none; }
+.method { columns: 2 420px; column-gap: 32px; }
+.method p, .method li { break-inside: avoid; }
+.method dt { font-weight: 600; margin-top: 8px; }
+.method dd { margin: 2px 0 0 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 13px; }
+.legend span.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+footer { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Satisfying Search <span class="sub">exact clocks for Satisfactory factories</span></h1>
+    <span id="status" class="status">Loading the solver…</span>
+  </header>
+
+  <div class="panel">
+    <h2>Scenario</h2>
+    <div id="scenario"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Verdict</h2>
+    <div id="summary"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Levers</h2>
+    <div id="levers" class="scroll"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Clocks</h2>
+    <div class="legend muted">
+      <span>Total clock = machine-equivalents × 100%. Decimals:</span>
+      <span><span class="sw" style="background:var(--d0)"></span>0</span>
+      <span><span class="sw" style="background:var(--d1)"></span>1</span>
+      <span><span class="sw" style="background:var(--d2)"></span>2</span>
+      <span><span class="sw" style="background:var(--d3)"></span>3</span>
+      <span><span class="sw" style="background:var(--d4)"></span>4</span>
+      <span>· click a name for its exact relations · a nice value or a typed % pins it</span>
+    </div>
+    <div id="clocks" class="scroll"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Why some clocks are awkward</h2>
+    <div id="whylist"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Method</h2>
+    <div class="method">
+      <dl>
+        <dt>Unknowns</dt>
+        <dd>One rate per column: a recipe, a generator burning one fuel, or the extraction of one resource. Rates are machine-equivalents at 100% clock; extraction is counted in reference extractors (30/min by default).</dd>
+        <dt>Legal clock</dt>
+        <dd>A total of <i>x</i> machine-equivalents is buildable with clocks of at most 4 decimals in percent exactly when 10<sup>6</sup><i>x</i> is an integer. Splitting over machines never helps or hurts: sums of legal clocks are legal, and a legal total always splits. A budget of <i>d</i> decimals means 10<sup>2+d</sup><i>x</i> is an integer.</dd>
+        <dt>Products</dt>
+        <dd><b>Proportional</b>: net outputs equal <i>s</i>·<i>p</i> for one scale <i>s</i> (kept inside its band). <b>Exact</b>: net output equals <i>e</i>. <b>Adjustable</b>: net output anywhere in [min, max]. Every other item nets exactly zero. Power is the one inequality.</dd>
+        <dt>Recipe choice</dt>
+        <dd>A mixed-integer program minimises Σ extraction / world supply, with at most one recipe per primary product and at most one generator recipe outside the uranium–plutonium–ficsonium chain. It only picks the set; nothing exact depends on its floating-point answer.</dd>
+        <dt>The lattice of clocks</dt>
+        <dd>With the recipe set fixed, exact elimination writes every rate as an affine function of <i>d</i> free parameters. Requiring every column on its grid cuts that space down to an affine integer lattice, kept in Hermite normal form. Each column then ranges over a progression <i>offset</i> + <i>k</i>·<i>step</i>; the step is the finest move any exact plan allows it.</dd>
+        <dt>Rigid groups</dt>
+        <dd>Columns whose rates stay in fixed ratio in every exact plan. Pinning one fixes the group. A ratio <i>p</i>/<i>q</i> with a prime other than 2 or 5 in <i>q</i> forces a divisibility; powers of 2 and 5 only cost decimals.</dd>
+        <dt>Levers and conflicts</dt>
+        <dd>For each exact rate and pin, the page drops that one constraint and reports the values it could take. When no exact plan exists, a deletion filter finds a small set of columns that already conflict, and the balances are reduced to explicit integer relations among them.</dd>
+        <dt>Snapping</dt>
+        <dd>The concrete plan is the lattice point nearest the previous plan that satisfies every inequality, found by HiGHS over an LLL-reduced basis (the Aardal–Hurkens–Lenstra reformulation). The solver's floats only choose the integer coordinates; the plan is recomputed and every inequality re-checked in exact rational arithmetic.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <footer>Game data: <span id="source"></span>. Exact arithmetic throughout; source and tests in the satisfying-search repository.</footer>
+</div>
+
+<!--HIGHS-->
+<!--WASM-->
+<!--MODEL-->
+<!--APP-->

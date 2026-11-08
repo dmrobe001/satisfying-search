@@ -1,0 +1,80 @@
+{
+ "_about": "Game constants used by plan.py that are not in the SatisfactoryTools data file (data1.0.json).",
+ "data_file": {
+  "name": "data1.0.json",
+  "source": "https://raw.githubusercontent.com/greeny/SatisfactoryTools/master/data/data1.0.json",
+  "sha256": "4caf63ba1cfd495eb33534fd5d1ae92631e786e72ad833e39357cb5194faa35f",
+  "note": "SatisfactoryTools export of the game's Docs.json (items, recipes, buildings, generators, miners)."
+ },
+ "world_supply_per_min": {
+  "values": {
+   "Desc_OreIron_C": 92100,
+   "Desc_OreCopper_C": 36900,
+   "Desc_Stone_C": 69900,
+   "Desc_Coal_C": 42300,
+   "Desc_OreGold_C": 15000,
+   "Desc_LiquidOil_C": 12600,
+   "Desc_RawQuartz_C": 13500,
+   "Desc_Sulfur_C": 10800,
+   "Desc_OreBauxite_C": 12300,
+   "Desc_OreUranium_C": 2100,
+   "Desc_NitrogenGas_C": 12000,
+   "Desc_SAM_C": 10200,
+   "Desc_Water_C": null
+  },
+  "definition": "All nodes at Miner Mk.3 / extractor at 250% clock; water unlimited (null).",
+  "source": "SatisfactoryTools src/Data/Data.ts, game version 1.0 table"
+ },
+ "phase5_requirement": {
+  "values": {
+   "Desc_SpaceElevatorPart_9_C": 1000,
+   "Desc_SpaceElevatorPart_10_C": 1000,
+   "Desc_SpaceElevatorPart_12_C": 256,
+   "Desc_SpaceElevatorPart_11_C": 200
+  },
+  "names": {
+   "Desc_SpaceElevatorPart_9_C": "Nuclear Pasta",
+   "Desc_SpaceElevatorPart_10_C": "Biochemical Sculptor",
+   "Desc_SpaceElevatorPart_12_C": "AI Expansion Server",
+   "Desc_SpaceElevatorPart_11_C": "Ballistic Warp Drive"
+  },
+  "source": "satisfactory.wiki.gg/wiki/Project_Assembly"
+ },
+ "nuclear_waste_per_rod": {
+  "values": {
+   "Desc_NuclearFuelRod_C": {
+    "item": "Desc_NuclearWaste_C",
+    "amount": 50
+   },
+   "Desc_PlutoniumFuelRod_C": {
+    "item": "Desc_PlutoniumWaste_C",
+    "amount": 10
+   }
+  },
+  "ficsonium_fuel_rod": "no waste; 1 rod/min per plant at 100%",
+  "source": "satisfactory.wiki.gg/wiki/Nuclear_Power_Plant"
+ },
+ "fixed_consumers": {
+  "Main Portal": {
+   "item": "Desc_SingularityCell_C",
+   "per_min": 2,
+   "power_mw_while_open": 250,
+   "source": "satisfactory.wiki.gg/wiki/Main_Portal"
+  },
+  "Alien Power Augmenter": {
+   "item": "Desc_AlienPowerFuel_C",
+   "per_min": 5,
+   "own_generation_mw": 500,
+   "grid_boost": "10% unfed, 30% with 5 Alien Power Matrices/min",
+   "source": "satisfactory.wiki.gg/wiki/Alien_Power_Augmenter"
+  }
+ },
+ "modeling_assumptions": {
+  "generators": "Do not throttle; fuel and power linear in clock (verified for version 1.0).",
+  "production_power_exponent": 1.321929,
+  "water_extractor_per_min_at_100pct": 120,
+  "resource_well_pressurizer_output_assumed_per_min_at_250pct": 600,
+  "biomass_burner": "excluded (fuel not automatable)",
+  "converter_recipes_excluded": "those whose product can be mined directly"
+ }
+}

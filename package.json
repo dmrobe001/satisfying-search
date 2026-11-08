@@ -1,0 +1,14 @@
+{
+  "name": "satisfying-search",
+  "private": true,
+  "type": "module",
+  "description": "Exact clock-lattice navigator for Satisfactory production plans",
+  "scripts": {
+    "model": "python3 tools/build_model.py",
+    "test": "node --test tests/*.test.js",
+    "build": "python3 tools/build_model.py && node tools/bundle.js"
+  },
+  "devDependencies": {
+    "highs": "1.15.3"
+  }
+}
