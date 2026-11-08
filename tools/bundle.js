@@ -10,7 +10,7 @@ const root = new URL("../", import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), "utf8");
 
 // dependency order
-const modules = ["rational", "lattice", "exact", "solver", "scenario", "model", "snap", "plan", "app"];
+const modules = ["rational", "lattice", "exact", "solver", "scenario", "model", "snap", "plan", "interlock", "app"];
 let code = "";
 for (const m of modules) {
   let src = read(`web/src/${m}.js`);

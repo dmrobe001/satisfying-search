@@ -117,6 +117,18 @@ tr.ok td { color: var(--good); }
 .method dd { margin: 2px 0 0 0; }
 .legend { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 13px; }
 .legend span.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+details.panel > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 10px; }
+details.panel > summary h2 { display: inline; margin: 0; }
+details.panel > summary::before { content: "▸"; color: var(--accent); }
+details.panel[open] > summary::before { content: "▾"; }
+.netgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+table.mini.wide { width: 100%; }
+table.mini th { font: 600 11px var(--font-display); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.cluster { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+ul.rels code { white-space: normal; word-break: break-word; }
+.finder { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
+tr.dep td { color: var(--muted); }
+.badcoef { color: var(--bad); font-weight: 600; }
 footer { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 </style>
 
@@ -126,64 +138,26 @@ footer { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
     <span id="status" class="status">Loading the solver…</span>
   </header>
 
-  <div class="panel">
-    <h2>Scenario</h2>
+  <details class="panel" id="scenario-panel">
+    <summary><h2>Scenario</h2> <span class="muted small">targets, soft floors, rebuild time, options</span></summary>
     <div id="scenario"></div>
+  </details>
+
+  <div class="panel">
+    <h2>Net rates in the continuous optimum</h2>
+    <div id="net"></div>
   </div>
 
   <div class="panel">
-    <h2>Verdict</h2>
-    <div id="summary"></div>
+    <h2>Interlocked clusters</h2>
+    <p class="small">Zero-net items (fluids, intermediates nobody wants) tie recipes together. Most can be balanced top-down, one producer at a time. A byproduct with no producer of its own cannot: its balance becomes an equation among recipes you have already set. The clusters below are the recipes joined by such equations.</p>
+    <div id="clusters"></div>
   </div>
 
   <div class="panel">
-    <h2>Levers</h2>
-    <div id="levers" class="scroll"></div>
-  </div>
-
-  <div class="panel">
-    <h2>Clocks</h2>
-    <div class="legend muted">
-      <span>Total clock = machine-equivalents × 100%. Decimals:</span>
-      <span><span class="sw" style="background:var(--d0)"></span>0</span>
-      <span><span class="sw" style="background:var(--d1)"></span>1</span>
-      <span><span class="sw" style="background:var(--d2)"></span>2</span>
-      <span><span class="sw" style="background:var(--d3)"></span>3</span>
-      <span><span class="sw" style="background:var(--d4)"></span>4</span>
-      <span>· click a name for its exact relations · a nice value or a typed % pins it</span>
-    </div>
-    <div id="clocks" class="scroll"></div>
-  </div>
-
-  <div class="panel">
-    <h2>Why some clocks are awkward</h2>
-    <div id="whylist"></div>
-  </div>
-
-  <div class="panel">
-    <h2>Method</h2>
-    <div class="method">
-      <dl>
-        <dt>Unknowns</dt>
-        <dd>One rate per column: a recipe, a generator burning one fuel, or the extraction of one resource. Rates are machine-equivalents at 100% clock; extraction is counted in reference extractors (30/min by default).</dd>
-        <dt>Legal clock</dt>
-        <dd>A total of <i>x</i> machine-equivalents is buildable with clocks of at most 4 decimals in percent exactly when 10<sup>6</sup><i>x</i> is an integer. Splitting over machines never helps or hurts: sums of legal clocks are legal, and a legal total always splits. A budget of <i>d</i> decimals means 10<sup>2+d</sup><i>x</i> is an integer.</dd>
-        <dt>Products</dt>
-        <dd><b>Proportional</b>: net outputs equal <i>s</i>·<i>p</i> for one scale <i>s</i> (kept inside its band). <b>Exact</b>: net output equals <i>e</i>. <b>Adjustable</b>: net output anywhere in [min, max]. Every other item nets exactly zero. Power is the one inequality.</dd>
-        <dt>Recipe choice</dt>
-        <dd>A mixed-integer program chooses the recipes that need the least of the map: it minimises the largest share of any resource's world supply (how far out you must expand, if each resource's nodes are spread evenly), with the total share as a tie-break. Constraints: Phase 5 at rate <i>s</i>; build-gun ingredients made fast enough to rebuild the factory's machines, belts, pipes, rails, foundations and power lines in <i>k</i>/<i>s</i> minutes; at most one recipe per primary product and one generator recipe outside the uranium–plutonium–ficsonium chain. It only picks the set; nothing exact depends on its floating-point answer.</dd>
-        <dt>Infrastructure estimate</dt>
-        <dd>Each item or fluid stream into or out of a machine counts as a 20 m belt or pipe, split evenly over the belt tiers (Mk.1–6) and pipe tiers (Mk.1–2); rail track is twice one belt tier's length; foundations cover twice the footprint; one power pole and one power line per machine. Footprints are approximate.</dd>
-        <dt>The lattice of clocks</dt>
-        <dd>With the recipe set fixed, exact elimination writes every rate as an affine function of <i>d</i> free parameters. Requiring every column on its grid cuts that space down to an affine integer lattice, kept in Hermite normal form. Each column then ranges over a progression <i>offset</i> + <i>k</i>·<i>step</i>; the step is the finest move any exact plan allows it.</dd>
-        <dt>Rigid groups</dt>
-        <dd>Columns whose rates stay in fixed ratio in every exact plan. Pinning one fixes the group. A ratio <i>p</i>/<i>q</i> with a prime other than 2 or 5 in <i>q</i> forces a divisibility; powers of 2 and 5 only cost decimals.</dd>
-        <dt>Levers and conflicts</dt>
-        <dd>For each exact rate and pin, the page drops that one constraint and reports the values it could take. When no exact plan exists, a deletion filter finds a small set of columns that already conflict, and the balances are reduced to explicit integer relations among them.</dd>
-        <dt>Snapping</dt>
-        <dd>The concrete plan is the lattice point nearest the previous plan that satisfies every inequality, found by HiGHS over an LLL-reduced basis (the Aardal–Hurkens–Lenstra reformulation). The solver's floats only choose the integer coordinates; the plan is recomputed and every inequality re-checked in exact rational arithmetic.</dd>
-      </dl>
-    </div>
+    <h2>Top-down links</h2>
+    <p class="small">Each recipe that makes a zero-net item, as a function of the recipes that use it (depth 0 is the top). A coefficient with a prime other than 2 or 5 in its denominator means the consumers' clocks must carry that prime before this recipe can have a finite-decimal clock. Extraction is counted in mining increments.</p>
+    <div id="links"></div>
   </div>
 
   <footer>Game data: <span id="source"></span>. Exact arithmetic throughout; source and tests in the satisfying-search repository.</footer>

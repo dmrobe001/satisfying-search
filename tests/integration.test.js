@@ -54,7 +54,7 @@ for (const [name, make] of [["default scenario", () => cloneScenario(DEFAULT_SCE
       return;
     }
     const res = await snap(S, sc, cols.map((c) => ch.x.get(c.id)));
-    assert.equal(res.violations.length, 0, "snapped plan violates an inequality");
+    assert.equal(res.violations.length, 0, `snapped plan violates an inequality (${res.status}): ${res.violations.map((v) => v.row.name).join(", ")}`);
     // exactness: every equality holds in rational arithmetic, every clock on the grid
     const { eqs } = buildEqualities(cols, sc, []);
     for (const e of eqs) {

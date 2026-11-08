@@ -106,7 +106,18 @@ export function lllTransform(cols, delta = 0.99) {
 
 // xref: Float64Array-like per column (or null entries). Returns
 // { status, x (exact Q[]), u, violations }
-export async function snap(S, scenario, xref, { timeLimit = 10 } = {}) {
+// Rounding the solver's near-integer answer can move a tight row by a hair;
+// if the exact re-check fails, aim further inside the bounds and try again.
+export async function snap(S, scenario, xref, opts = {}) {
+  let res;
+  for (const marginScale of [1e-6, 1e-4, 1e-2]) {
+    res = await snapOnce(S, scenario, xref, { ...opts, marginScale });
+    if (!res.violations || !res.violations.length || res.status === "infeasible" || res.status === "no exact plan") return res;
+  }
+  return res;
+}
+
+async function snapOnce(S, scenario, xref, { timeLimit = 10, marginScale = 1e-6 } = {}) {
   const lat = S.lattice;
   if (lat.failure) return { status: "no exact plan" };
   const d = lat.d;
@@ -170,7 +181,7 @@ export async function snap(S, scenario, xref, { timeLimit = 10 } = {}) {
     }
     // aim slightly inside each bound: the solver's tolerance is about 1e-6,
     // and the plan is then re-checked exactly
-    const margin = (b) => (globalThis.SNAP_MARGIN ?? 1e-6) * (1 + Math.abs(toNumber(b)));
+    const margin = (b) => marginScale * (1 + Math.abs(toNumber(b)));
     if (row.lo) cons.push(`c${r++}: ${wrap(t)} >= ${lpNum(toNumber(sub(row.lo, c)) + margin(row.lo))}`);
     if (row.hi) cons.push(`c${r++}: ${wrap(t)} <= ${lpNum(toNumber(sub(row.hi, c)) - margin(row.hi))}`);
   }

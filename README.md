@@ -1,12 +1,24 @@
 # Satisfying Search
 
-An exact clock-lattice navigator for Satisfactory production plans. You state what the
-factory must make, it picks a recipe set, and then shows the **set of all exact plans**
-for that recipe set: which clocks are free, which move together, which values each clock
-can take, and why some clocks are forced to be awkward.
+A helper for setting Satisfactory clocks by hand, top-down. It chooses a recipe set that needs
+as little of the map as possible, reports the net rates that choice implies, and then shows the
+structure you meet working down the production net:
 
-The tool is a single self-contained HTML page: `dist/satisfying-search.html`. Open it in a
-browser; nothing is installed and nothing is sent anywhere.
+* **Top-down links.** Each recipe that makes a zero-net item (fluids and intermediates nobody
+  wants), as an exact function of the clocks of the recipes that use it. Coefficients with a
+  prime other than 2 or 5 in the denominator are flagged: those are the places where the
+  consumers' clocks must carry that prime.
+* **Interlocked clusters.** A zero-net byproduct with no producer of its own (Dark Matter
+  Residue, Uranium Waste) cannot be balanced by choosing one recipe; its balance is an equation
+  among recipes already set. The page eliminates everything in between and prints those
+  equations with integer coefficients, notes which members would need a non-2/5 divisibility if
+  adjusted last, and finds exact joint settings with few decimals near clocks you type in, with
+  any member locked.
+
+Items with soft floors (build-gun ingredients, equipment, targets) do not tie recipes together:
+their producers are knobs and the excess is net output.
+
+The tool is a single self-contained HTML page: `dist/satisfying-search.html`.
 
 ## What it computes
 

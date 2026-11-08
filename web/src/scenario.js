@@ -47,7 +47,7 @@ export const DEFAULT_SCENARIO = {
   // belts, pipes, rails, foundations, power per machine (see model.js)
   infrastructure: { enabled: true, channelM: "20", trackFactor: "2", foundationFactor: "2" },
   options: {
-    extractionUnit: "30", // per-minute output of the reference extractor at 100%
+    extractionUnit: "15", // mining increment: half a Mk.1 miner on an impure node
     powerBoost: "13/10", // Alien Power Augmenter, fed
     extraMW: "500", // the Augmenter's own generation
     fixedMW: "250", // Main Portal while open

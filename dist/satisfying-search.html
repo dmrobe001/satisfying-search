@@ -117,6 +117,18 @@ tr.ok td { color: var(--good); }
 .method dd { margin: 2px 0 0 0; }
 .legend { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 13px; }
 .legend span.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+details.panel > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 10px; }
+details.panel > summary h2 { display: inline; margin: 0; }
+details.panel > summary::before { content: "▸"; color: var(--accent); }
+details.panel[open] > summary::before { content: "▾"; }
+.netgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+table.mini.wide { width: 100%; }
+table.mini th { font: 600 11px var(--font-display); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.cluster { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+ul.rels code { white-space: normal; word-break: break-word; }
+.finder { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
+tr.dep td { color: var(--muted); }
+.badcoef { color: var(--bad); font-weight: 600; }
 footer { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 </style>
 
@@ -126,64 +138,26 @@ footer { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
     <span id="status" class="status">Loading the solver…</span>
   </header>
 
-  <div class="panel">
-    <h2>Scenario</h2>
+  <details class="panel" id="scenario-panel">
+    <summary><h2>Scenario</h2> <span class="muted small">targets, soft floors, rebuild time, options</span></summary>
     <div id="scenario"></div>
+  </details>
+
+  <div class="panel">
+    <h2>Net rates in the continuous optimum</h2>
+    <div id="net"></div>
   </div>
 
   <div class="panel">
-    <h2>Verdict</h2>
-    <div id="summary"></div>
+    <h2>Interlocked clusters</h2>
+    <p class="small">Zero-net items (fluids, intermediates nobody wants) tie recipes together. Most can be balanced top-down, one producer at a time. A byproduct with no producer of its own cannot: its balance becomes an equation among recipes you have already set. The clusters below are the recipes joined by such equations.</p>
+    <div id="clusters"></div>
   </div>
 
   <div class="panel">
-    <h2>Levers</h2>
-    <div id="levers" class="scroll"></div>
-  </div>
-
-  <div class="panel">
-    <h2>Clocks</h2>
-    <div class="legend muted">
-      <span>Total clock = machine-equivalents × 100%. Decimals:</span>
-      <span><span class="sw" style="background:var(--d0)"></span>0</span>
-      <span><span class="sw" style="background:var(--d1)"></span>1</span>
-      <span><span class="sw" style="background:var(--d2)"></span>2</span>
-      <span><span class="sw" style="background:var(--d3)"></span>3</span>
-      <span><span class="sw" style="background:var(--d4)"></span>4</span>
-      <span>· click a name for its exact relations · a nice value or a typed % pins it</span>
-    </div>
-    <div id="clocks" class="scroll"></div>
-  </div>
-
-  <div class="panel">
-    <h2>Why some clocks are awkward</h2>
-    <div id="whylist"></div>
-  </div>
-
-  <div class="panel">
-    <h2>Method</h2>
-    <div class="method">
-      <dl>
-        <dt>Unknowns</dt>
-        <dd>One rate per column: a recipe, a generator burning one fuel, or the extraction of one resource. Rates are machine-equivalents at 100% clock; extraction is counted in reference extractors (30/min by default).</dd>
-        <dt>Legal clock</dt>
-        <dd>A total of <i>x</i> machine-equivalents is buildable with clocks of at most 4 decimals in percent exactly when 10<sup>6</sup><i>x</i> is an integer. Splitting over machines never helps or hurts: sums of legal clocks are legal, and a legal total always splits. A budget of <i>d</i> decimals means 10<sup>2+d</sup><i>x</i> is an integer.</dd>
-        <dt>Products</dt>
-        <dd><b>Proportional</b>: net outputs equal <i>s</i>·<i>p</i> for one scale <i>s</i> (kept inside its band). <b>Exact</b>: net output equals <i>e</i>. <b>Adjustable</b>: net output anywhere in [min, max]. Every other item nets exactly zero. Power is the one inequality.</dd>
-        <dt>Recipe choice</dt>
-        <dd>A mixed-integer program chooses the recipes that need the least of the map: it minimises the largest share of any resource's world supply (how far out you must expand, if each resource's nodes are spread evenly), with the total share as a tie-break. Constraints: Phase 5 at rate <i>s</i>; build-gun ingredients made fast enough to rebuild the factory's machines, belts, pipes, rails, foundations and power lines in <i>k</i>/<i>s</i> minutes; at most one recipe per primary product and one generator recipe outside the uranium–plutonium–ficsonium chain. It only picks the set; nothing exact depends on its floating-point answer.</dd>
-        <dt>Infrastructure estimate</dt>
-        <dd>Each item or fluid stream into or out of a machine counts as a 20 m belt or pipe, split evenly over the belt tiers (Mk.1–6) and pipe tiers (Mk.1–2); rail track is twice one belt tier's length; foundations cover twice the footprint; one power pole and one power line per machine. Footprints are approximate.</dd>
-        <dt>The lattice of clocks</dt>
-        <dd>With the recipe set fixed, exact elimination writes every rate as an affine function of <i>d</i> free parameters. Requiring every column on its grid cuts that space down to an affine integer lattice, kept in Hermite normal form. Each column then ranges over a progression <i>offset</i> + <i>k</i>·<i>step</i>; the step is the finest move any exact plan allows it.</dd>
-        <dt>Rigid groups</dt>
-        <dd>Columns whose rates stay in fixed ratio in every exact plan. Pinning one fixes the group. A ratio <i>p</i>/<i>q</i> with a prime other than 2 or 5 in <i>q</i> forces a divisibility; powers of 2 and 5 only cost decimals.</dd>
-        <dt>Levers and conflicts</dt>
-        <dd>For each exact rate and pin, the page drops that one constraint and reports the values it could take. When no exact plan exists, a deletion filter finds a small set of columns that already conflict, and the balances are reduced to explicit integer relations among them.</dd>
-        <dt>Snapping</dt>
-        <dd>The concrete plan is the lattice point nearest the previous plan that satisfies every inequality, found by HiGHS over an LLL-reduced basis (the Aardal–Hurkens–Lenstra reformulation). The solver's floats only choose the integer coordinates; the plan is recomputed and every inequality re-checked in exact rational arithmetic.</dd>
-      </dl>
-    </div>
+    <h2>Top-down links</h2>
+    <p class="small">Each recipe that makes a zero-net item, as a function of the recipes that use it (depth 0 is the top). A coefficient with a prime other than 2 or 5 in its denominator means the consumers' clocks must carry that prime before this recipe can have a finite-decimal clock. Extraction is counted in mining increments.</p>
+    <div id="links"></div>
   </div>
 
   <footer>Game data: <span id="source"></span>. Exact arithmetic throughout; source and tests in the satisfying-search repository.</footer>
@@ -9039,7 +9013,7 @@ const DEFAULT_SCENARIO = {
   // belts, pipes, rails, foundations, power per machine (see model.js)
   infrastructure: { enabled: true, channelM: "20", trackFactor: "2", foundationFactor: "2" },
   options: {
-    extractionUnit: "30", // per-minute output of the reference extractor at 100%
+    extractionUnit: "15", // mining increment: half a Mk.1 miner on an impure node
     powerBoost: "13/10", // Alien Power Augmenter, fed
     extraMW: "500", // the Augmenter's own generation
     fixedMW: "250", // Main Portal while open
@@ -9433,7 +9407,18 @@ function lllTransform(cols, delta = 0.99) {
 
 // xref: Float64Array-like per column (or null entries). Returns
 // { status, x (exact Q[]), u, violations }
-async function snap(S, scenario, xref, { timeLimit = 10 } = {}) {
+// Rounding the solver's near-integer answer can move a tight row by a hair;
+// if the exact re-check fails, aim further inside the bounds and try again.
+async function snap(S, scenario, xref, opts = {}) {
+  let res;
+  for (const marginScale of [1e-6, 1e-4, 1e-2]) {
+    res = await snapOnce(S, scenario, xref, { ...opts, marginScale });
+    if (!res.violations || !res.violations.length || res.status === "infeasible" || res.status === "no exact plan") return res;
+  }
+  return res;
+}
+
+async function snapOnce(S, scenario, xref, { timeLimit = 10, marginScale = 1e-6 } = {}) {
   const lat = S.lattice;
   if (lat.failure) return { status: "no exact plan" };
   const d = lat.d;
@@ -9497,7 +9482,7 @@ async function snap(S, scenario, xref, { timeLimit = 10 } = {}) {
     }
     // aim slightly inside each bound: the solver's tolerance is about 1e-6,
     // and the plan is then re-checked exactly
-    const margin = (b) => (globalThis.SNAP_MARGIN ?? 1e-6) * (1 + Math.abs(toNumber(b)));
+    const margin = (b) => marginScale * (1 + Math.abs(toNumber(b)));
     if (row.lo) cons.push(`c${r++}: ${wrap(t)} >= ${lpNum(toNumber(sub(row.lo, c)) + margin(row.lo))}`);
     if (row.hi) cons.push(`c${r++}: ${wrap(t)} <= ${lpNum(toNumber(sub(row.hi, c)) - margin(row.hi))}`);
   }
@@ -9697,683 +9682,528 @@ async function searchBans(model, scenario, S, { candidateColumns, chooseRecipes,
   return results;
 }
 
+// ---- interlock.js ----
+// Top-down structure of a recipe set, the way one works it by hand.
+//
+// Items are either *free* (soft floors and targets: their excess is net
+// output, so their producer is a knob) or *zero-net* (fluids and pure
+// intermediates). Each zero-net item normally has a designated producer: the
+// active recipe whose primary product it is. Working top-down, that producer
+// is fixed by its consumers:
+//     x_producer = ( sum_consumers use_c x_c  -  sum_other producers make_p x_p ) / yield
+// Those are the *links*. A zero-net item with no designated producer (a
+// byproduct such as Dark Matter Residue or Uranium Waste) cannot be balanced
+// by choosing one recipe: its balance is a *relation* among recipes already
+// set. Recipes joined by relations form *interlocked clusters*.
+
+
+function freeItems(model, scenario) {
+  const free = new Set([...Object.keys(scenario.adjustable || {}), ...Object.keys(scenario.exact || {}),
+    ...Object.keys((scenario.proportional && scenario.proportional.items) || {}), ...model.resources]);
+  return free;
+}
+
+// cols: active columns (recipes, generators, extraction) with exact io
+function interlockAnalysis(model, scenario, cols) {
+  const free = freeItems(model, scenario);
+  // extraction counts as the bottom producer of its resource, in steps of the
+  // reference extractor; resources are zero-net here so the links reach the miners
+  for (const r of model.resources) free.delete(r);
+  free.delete("Desc_Water_C");
+  const used = cols.filter((c) => !(c.kind === "extract" && c.resource === "Desc_Water_C"));
+  const rows = new Map(); // item -> Map(j -> Q)
+  used.forEach((c, j) => {
+    for (const [it, v] of c.io) {
+      if (free.has(it) || it === "Desc_Water_C") continue;
+      if (!rows.has(it)) rows.set(it, new Map());
+      rows.get(it).set(j, v);
+    }
+  });
+  // designated producer of each zero-net item
+  const designated = new Map();
+  used.forEach((c, j) => {
+    const prim = c.kind === "extract" ? c.resource : c.kind === "recipe" ? c.primary : null;
+    if (prim && rows.has(prim) && !designated.has(prim) && toNumber(rows.get(prim).get(j) || ZERO) > 0) designated.set(prim, j);
+  });
+  const isDesignated = new Set(designated.values());
+
+  // links
+  const links = [];
+  for (const [it, j] of designated) {
+    const row = rows.get(it);
+    const y = row.get(j);
+    const terms = [];
+    for (const [k, v] of row) if (k !== j) terms.push({ j: k, coef: div(neg(v), y) });
+    links.push({ item: it, j, yield: y, terms });
+  }
+
+  // depth: 0 for recipes that feed nothing zero-net; producer = 1 + max over consumers
+  const depth = new Array(used.length).fill(0);
+  for (let pass = 0; pass < used.length; pass++) {
+    let changed = false;
+    for (const L of links) for (const t of L.terms) {
+      if (toNumber(t.coef) > 0 && depth[L.j] < depth[t.j] + 1 && depth[t.j] + 1 < used.length) { depth[L.j] = depth[t.j] + 1; changed = true; }
+    }
+    if (!changed) break;
+  }
+  links.sort((a, b) => depth[a.j] - depth[b.j]);
+
+  // relations: eliminate designated producers (deepest first), what remains
+  // are equations among knobs
+  const items = [...rows.keys()];
+  const order = used.map((_, j) => j).sort((a, b) => {
+    const da = isDesignated.has(a), db = isDesignated.has(b);
+    if (da !== db) return da ? -1 : 1;
+    return depth[b] - depth[a];
+  });
+  const pos = new Map(order.map((j, p) => [j, p]));
+  const M = items.map((it) => {
+    const r = rows.get(it);
+    let L = 1n;
+    for (const v of r.values()) L = blcm(L, v.d);
+    const out = new Array(order.length).fill(0n);
+    for (const [j, v] of r) out[pos.get(j)] = v.n * (L / v.d);
+    return out;
+  });
+  const nDes = order.filter((j) => isDesignated.has(j)).length;
+  const { rows: R, pivotOf } = rrefInt(M, order.length);
+  const relations = [];
+  for (const [c, r] of pivotOf) {
+    if (c < nDes) continue;
+    const row = R[r];
+    let g = 0n;
+    for (const v of row) g = bgcd(g, v);
+    const terms = [];
+    row.forEach((v, p) => { if (v !== 0n) terms.push([order[p], v / g]); });
+    if (terms.length > 1) relations.push({ terms });
+  }
+  // clusters: relations sharing members
+  const parent = relations.map((_, i) => i);
+  const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const owner = new Map();
+  relations.forEach((rel, i) => rel.terms.forEach(([j]) => {
+    if (owner.has(j)) parent[find(i)] = find(owner.get(j)); else owner.set(j, i);
+  }));
+  const groups = new Map();
+  relations.forEach((rel, i) => { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(rel); });
+  const clusters = [...groups.values()].map((rels) => {
+    const members = [...new Set(rels.flatMap((r) => r.terms.map(([j]) => j)))];
+    // designated producers fixed entirely by members, worth keeping nice too
+    const memberSet = new Set(members);
+    const dependents = links.filter((L) => !memberSet.has(L.j) && L.terms.length && L.terms.every((t) => memberSet.has(t.j))).map((L) => L.j);
+    return { relations: rels, members, dependents };
+  });
+  return { cols: used, rows, designated, links, depth, relations, clusters, free };
+}
+
+function rrefInt(rows, n) {
+  const norm = (row) => { let g = 0n; for (const v of row) g = bgcd(g, v); if (g > 1n) for (let k = 0; k < row.length; k++) row[k] /= g; return row; };
+  const pivotOf = new Map();
+  let r = 0;
+  for (let c = 0; c < n && r < rows.length; c++) {
+    let pr = -1;
+    for (let i = r; i < rows.length; i++) if (rows[i][c] !== 0n) { pr = i; break; }
+    if (pr < 0) continue;
+    [rows[r], rows[pr]] = [rows[pr], rows[r]];
+    const P = rows[r];
+    if (P[c] < 0n) for (let k = 0; k < P.length; k++) P[k] = -P[k];
+    for (let i = 0; i < rows.length; i++) {
+      if (i === r || rows[i][c] === 0n) continue;
+      const a = P[c], b = rows[i][c], g = bgcd(a, b);
+      for (let k = 0; k < rows[i].length; k++) rows[i][k] = rows[i][k] * (a / g) - P[k] * (b / g);
+      norm(rows[i]);
+    }
+    pivotOf.set(c, r);
+    r++;
+  }
+  return { rows, pivotOf };
+}
+
+// What each member of a relation needs, if it is the one adjusted last:
+// the rest of the relation must be divisible by its coefficient.
+function absorberCost(rel) {
+  return rel.terms.map(([j, w]) => {
+    const a = w < 0n ? -w : w;
+    return { j, coef: w, hard: nonDecimalPart(a), decimal: a / nonDecimalPart(a) };
+  });
+}
+
+// Nice joint settings for a cluster: every member and dependent on the grid
+// of `decimals` (in percent), all cluster balances exact, near `ref`
+// (machine-equivalents per column index). Returns up to `count` settings.
+function niceSettings(IA, cluster, ref, { decimals = 1, count = 12, radius = 2, locked = [], lockedValues = [] } = {}) {
+  const js = [...cluster.members, ...cluster.dependents];
+  // a sub-problem whose "items" are the cluster's relations and the
+  // dependents' link equations, so exactly those balances are imposed
+  const io = js.map(() => new Map());
+  const at = new Map(js.map((j, i) => [j, i]));
+  cluster.relations.forEach((rel, r) => rel.terms.forEach(([j, w]) => io[at.get(j)].set(`rel${r}`, Q(w))));
+  for (const dj of cluster.dependents) {
+    const L = IA.links.find((l) => l.j === dj);
+    io[at.get(dj)].set(`link${dj}`, ONE);
+    for (const t of L.terms) io[at.get(t.j)].set(`link${dj}`, neg(t.coef));
+  }
+  const sub = js.map((j, i) => ({ ...IA.cols[j], io: io[i] }));
+  const scen = { proportional: { items: {} }, exact: {}, adjustable: {} };
+  const dec = {};
+  for (const c of sub) dec[c.id] = decimals;
+  const pins = locked.map((j, i) => ({ type: "column", id: IA.cols[j].id, value: `${lockedValues[i].n}/${lockedValues[i].d}` }));
+  const S = analyze(sub, scen, pins, dec);
+  if (S.contradictions.length) return { settings: [], S, impossible: true };
+  if (S.lattice.failure) return { settings: [], S, impossible: true };
+  const d = S.lattice.d;
+  const refv = js.map((j) => ref[j] || 0);
+  const w = refv.map((v) => 1 / Math.max(Math.abs(v), 0.05));
+  // lattice points x = K + M u; reduce M (weighted) and enumerate near the
+  // least-squares centre
+  const prog = S.lattice.prog;
+  const Mf = [...Array(d)].map((_, k) => sub.map((c, i) => { const v = prog.get(i).M.get(k); return v ? toNumber(v) : 0; }));
+  const Kf = sub.map((c, i) => toNumber(prog.get(i).K));
+  const T = lllTransform(Mf.map((col) => col.map((v, i) => v * w[i]))) || Mf.map((_, i) => Mf.map((__, t) => (t === i ? 1 : 0)));
+  const B = T.map((tk) => sub.map((c, i) => tk.reduce((s, coef, t) => s + coef * Mf[t][i], 0)));
+  // centre by least squares on weighted coordinates (normal equations)
+  const G = B.map((bi) => B.map((bj) => bi.reduce((s, v, i) => s + v * bj[i] * w[i] * w[i], 0)));
+  const rhs = B.map((bi) => bi.reduce((s, v, i) => s + v * (refv[i] - Kf[i]) * w[i] * w[i], 0));
+  const c0 = solveSym(G, rhs).map(Math.round);
+  const seen = new Set();
+  const cands = [];
+  const visit = (coef) => {
+    const key = coef.join(",");
+    if (seen.has(key)) return;
+    seen.add(key);
+    const x = Kf.map((k, i) => k + coef.reduce((s, ck, t) => s + ck * B[t][i], 0));
+    if (x.some((v) => v < -1e-9)) return;
+    const dist = x.reduce((s, v, i) => s + Math.abs(v - refv[i]) * w[i], 0);
+    cands.push({ coef, dist });
+  };
+  const dims = Math.min(d, 9);
+  const span = dims > 6 ? 1 : radius;
+  const rec = (k, coef) => {
+    if (k === dims) { visit(coef.slice()); return; }
+    for (let s = -span; s <= span; s++) { coef[k] = c0[k] + s; rec(k + 1, coef); }
+  };
+  rec(0, c0.slice());
+  cands.sort((a, b) => a.dist - b.dist);
+  // exact values for the best ones
+  const settings = cands.slice(0, count).map(({ coef, dist }) => {
+    const u = [...Array(d)].map((_, t) => BigInt(T.reduce((s, tk, k) => s + tk[t] * coef[k], 0)));
+    const vals = sub.map((c, i) => {
+      let v = prog.get(i).K;
+      for (const [k, m] of prog.get(i).M) if (u[k] !== 0n) v = add(v, mul(m, Q(u[k])));
+      return v;
+    });
+    return { values: vals, dist };
+  });
+  return { settings, js, S };
+}
+
+function solveSym(A, b) {
+  const n = b.length;
+  const M = A.map((r, i) => [...r, b[i]]);
+  for (let i = 0; i < n; i++) {
+    let p = i;
+    for (let k = i + 1; k < n; k++) if (Math.abs(M[k][i]) > Math.abs(M[p][i])) p = k;
+    [M[i], M[p]] = [M[p], M[i]];
+    if (Math.abs(M[i][i]) < 1e-15) continue;
+    for (let k = 0; k < n; k++) if (k !== i) { const f = M[k][i] / M[i][i]; for (let t = i; t <= n; t++) M[k][t] -= f * M[i][t]; }
+  }
+  return M.map((r, i) => (Math.abs(r[i]) < 1e-15 ? 0 : r[n] / r[i]));
+}
+
 // ---- app.js ----
-// Browser UI. Everything exact is computed by the other modules; this file
-// only keeps state, calls them, and renders.
+// Browser UI: recipe choice (continuous optimum), then the top-down structure
+// of the chosen recipe set: interlocked clusters and their nice settings, and
+// the link table with awkward ratios flagged.
 
 
-const STORE = "satisfying-search-v2";
+const STORE = "satisfying-search-v3";
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const itemName = (id) => (MODEL.items[id] ? MODEL.items[id].name : id);
 const nameToItem = new Map(Object.entries(MODEL.items).map(([k, v]) => [v.name.toLowerCase(), k]));
-
-const PRESETS = {
-  portal: { label: "Phase 5, Portal, Augmenter, equipment, self-reproduction", make: () => cloneScenario(DEFAULT_SCENARIO) },
-  loose: {
-    label: "Same, with Singularity Cells adjustable in 2–2.001/min",
-    make: () => {
-      const s = cloneScenario(DEFAULT_SCENARIO);
-      delete s.exact.Desc_SingularityCell_C;
-      s.adjustable.Desc_SingularityCell_C = { min: "2", max: "2.001" };
-      return s;
-    },
-  },
-};
+const pct = (q) => `${percentString(q, 12)}%`;
 
 let state = {
-  scenario: PRESETS.portal.make(),
-  active: null, // [ids] from recipe choice
-  choiceX: null, // {id: float}
+  scenario: cloneScenario(DEFAULT_SCENARIO),
+  choiceX: null, // {id: float} continuous optimum
   objective: null,
-  pins: [],
-  decimals: {},
-  point: null, // {id: "p/q"}
-  open: {}, // expanded detail rows
+  refs: {}, // {colId: "percent string"} user reference clocks
+  locks: {}, // {colId: true}
+  clusterDecimals: {}, // {clusterIndex: d}
 };
-let S = null; // current analysis
-const XS = () => expandScenario(MODEL, state.scenario); // scenario as the engines see it
-let snapResult = null;
+let IA = null;
+let found = {}; // clusterIndex -> result
 let busy = false;
-let banSearch = null;
 
-function save() {
-  try { localStorage.setItem(STORE, JSON.stringify({ ...state, open: {} })); } catch (e) { /* storage unavailable */ }
-}
+const XS = () => expandScenario(MODEL, state.scenario);
+function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* unavailable */ } }
 function load() {
-  try {
-    const s = JSON.parse(localStorage.getItem(STORE) || "null");
-    if (s && s.scenario) state = { ...state, ...s, open: {} };
-  } catch (e) { /* ignore */ }
+  try { const s = JSON.parse(localStorage.getItem(STORE) || "null"); if (s && s.scenario) state = { ...state, ...s }; } catch (e) { /* ignore */ }
 }
-
-function setStatus(msg, kind = "") {
-  const el = $("#status");
-  el.textContent = msg;
-  el.className = `status ${kind}`;
-}
-
+function setStatus(msg, kind = "") { const el = $("#status"); el.textContent = msg; el.className = `status ${kind}`; }
 async function withBusy(msg, fn) {
   if (busy) return;
-  busy = true;
-  document.body.classList.add("busy");
-  setStatus(msg, "working");
+  busy = true; document.body.classList.add("busy"); setStatus(msg, "working");
   await new Promise((r) => setTimeout(r, 20));
   try { await fn(); } catch (e) { console.error(e); setStatus(`Error: ${e.message}`, "bad"); }
-  busy = false;
-  document.body.classList.remove("busy");
+  busy = false; document.body.classList.remove("busy");
 }
 
-// ---------------------------------------------------------------- actions
+// ---------------------------------------------------------------- solving
 
-async function chooseAndAnalyze() {
+async function choose() {
   await withBusy("Choosing recipes (mixed-integer program)…", async () => {
     const xs = XS();
     const cand = candidateColumns(MODEL, xs);
     const t = performance.now();
     const ch = await chooseRecipes(cand, xs);
-    if (!ch.active.length) {
-      state.active = null; S = null; snapResult = null;
-      setStatus(`Recipe choice: ${ch.status}. Nothing satisfies the scenario; loosen a band or unban something.`, "bad");
-      render();
-      return;
-    }
-    state.active = ch.active;
+    if (!ch.active.length) { setStatus(`Recipe choice: ${ch.status}. Loosen a floor or unban something.`, "bad"); IA = null; render(); return; }
     state.choiceX = Object.fromEntries(ch.x);
     state.objective = ch.objective;
-    const ids = new Set(ch.active);
-    state.pins = state.pins.filter((p) => p.type !== "column" || ids.has(p.id));
-    state.point = null;
-    setStatus(`Chose ${ch.active.length} columns in ${((performance.now() - t) / 1000).toFixed(1)} s.`);
-    await analyzeAndSnap(true);
+    found = {};
+    save();
+    analyzeSet();
+    setStatus(`Chose ${ch.active.length} columns in ${((performance.now() - t) / 1000).toFixed(1)} s.`, "good");
   });
 }
 
-function activeColumns() {
-  const cand = candidateColumns(MODEL, XS());
-  const ids = new Set(state.active || []);
-  return orderColumns(cand.filter((c) => ids.has(c.id)));
+function activeCols() {
+  const xs = XS();
+  const ids = new Set(Object.keys(state.choiceX || {}));
+  return candidateColumns(MODEL, xs).filter((c) => ids.has(c.id));
 }
-
-async function analyzeAndSnap(fromChoice = false) {
-  const cols = activeColumns();
-  const decimals = {};
-  for (const c of cols) decimals[c.id] = state.decimals[c.id] ?? state.scenario.decimals ?? 4;
-  S = fullAnalysis(cols, XS(), state.pins, decimals);
-  S.decimals = decimals;
-  snapResult = null;
-  if (S.lattice.failure || S.contradictions.length) {
-    setStatus("No exact plan exists with this recipe set and these constraints — see the explanation below.", "bad");
-  } else {
-    const ref = cols.map((c) => {
-      if (!fromChoice && state.point && state.point[c.id]) return toNumber(parseQ(state.point[c.id]));
-      return state.choiceX ? state.choiceX[c.id] ?? 0 : 0;
-    });
-    const t = performance.now();
-    snapResult = await snap(S, XS(), ref);
-    const ms = performance.now() - t;
-    if (snapResult.x && snapResult.status !== "infeasible" && !snapResult.violations.length) {
-      state.point = Object.fromEntries(cols.map((c, j) => [c.id, qstr(snapResult.x[j])]));
-      setStatus(`Exact plan: ${S.free.length} free parameters, ${S.n} columns; structure ${S.ms.toFixed(0)} ms, snap ${ms.toFixed(0)} ms.`, "good");
-    } else {
-      setStatus("Exact plans exist, but none satisfies every inequality — see the levers below.", "warn");
-    }
-  }
-  save();
+function analyzeSet() {
+  if (!state.choiceX) { IA = null; render(); return; }
+  IA = interlockAnalysis(MODEL, XS(), activeCols());
   render();
 }
-
-function addPin(pin) {
-  state.pins = state.pins.filter((p) => !(p.type === pin.type && p.id === pin.id && p.item === pin.item));
-  state.pins.push(pin);
-  withBusy("Re-solving with the new pin…", () => analyzeAndSnap());
-}
-function removePin(i) {
-  state.pins.splice(i, 1);
-  withBusy("Re-solving…", () => analyzeAndSnap());
-}
-function setBudget(id, d) {
-  if (d === "" || d === null) delete state.decimals[id];
-  else state.decimals[id] = Number(d);
-  withBusy("Re-solving with the new decimal budget…", () => analyzeAndSnap());
-}
-function ban(id) {
-  state.scenario.banned = [...new Set([...(state.scenario.banned || []), id])];
-  chooseAndAnalyze();
+// reference clock (machine-equivalents) of column j: typed value, else continuous optimum
+function refOf(c) {
+  const typed = state.refs[c.id];
+  if (typed !== undefined && typed !== "") { try { return toNumber(parseQ(typed)) / 100; } catch (e) { /* fall through */ } }
+  return state.choiceX ? state.choiceX[c.id] ?? 0 : 0;
 }
 
-// ---------------------------------------------------------------- formatting
-
-const pct = (x, max = 14) => `${percentString(x, max)}%`;
-function rateStr(q) {
-  return decimalString(q, 12);
+function findNice(ci) {
+  const cl = IA.clusters[ci];
+  const ref = IA.cols.map((c) => refOf(c));
+  const decimals = state.clusterDecimals[ci] ?? 1;
+  // locked members: impose them as extra one-member relations at the typed value
+  const locked = cl.members.filter((j) => state.locks[IA.cols[j].id]);
+  const res = niceSettings(IA, cl, ref, { decimals, count: 6, locked, lockedValues: locked.map((j) => lockedValue(IA.cols[j])) });
+  found[ci] = res;
+  renderClusters();
 }
-function progStr(prog, unitIsPercent = true) {
-  if (!prog) return "—";
-  if (isZero(prog.step)) return `only ${unitIsPercent ? pct(prog.K) : rateStr(prog.K)}`;
-  const st = unitIsPercent ? pct(prog.step) : rateStr(prog.step);
-  const off = isZero(prog.offset) ? "" : ` + ${unitIsPercent ? pct(prog.offset) : rateStr(prog.offset)}`;
-  return `k × ${st}${off}`;
-}
-function nearestInProg(prog, v, count = 2) {
-  if (!prog || isZero(prog.step)) return prog ? [prog.K] : [];
-  const k = roundQ(div(sub(v, prog.offset), prog.step));
-  const out = [];
-  for (const kk of [k - 1n, k, k + 1n]) out.push(add(prog.offset, mul(prog.step, Q(kk))));
-  return out.sort((a, b) => cmp(absq(sub(a, v)), absq(sub(b, v)))).slice(0, count);
-}
-const absq = (a) => (a.n < 0n ? Q(-a.n, a.d) : a);
-function sourceLabel(lbl) {
-  if (!lbl) return "?";
-  if (lbl.type === "exact") return `exact rate of ${itemName(lbl.item)}`;
-  if (lbl.type === "pin") return pinLabel(lbl.pin);
-  return lbl.type;
-}
-function pinLabel(p) {
-  if (p.type === "column") {
-    const c = MODEL.columns.find((c) => c.id === p.id);
-    return `pin: ${c ? c.name.replace(/^Alternate: /, "") : p.id} = ${pct(parseQ(p.value))}`;
-  }
-  if (p.type === "scale") return `pin: scale = ${decimalString(parseQ(p.value), 12)} sets/min`;
-  return `pin: output of ${itemName(p.item)} = ${decimalString(parseQ(p.value), 12)}/min`;
-}
-function decClass(d) {
-  if (d === Infinity) return "dec-bad";
-  return `dec-${Math.min(d, 4)}`;
+function lockedValue(c) {
+  const typed = state.refs[c.id];
+  if (typed !== undefined && typed !== "") return div(parseQ(typed), Q(100n));
+  return parseQ((state.choiceX[c.id] ?? 0).toFixed(6));
 }
 
-// ---------------------------------------------------------------- scenario editor
+// ---------------------------------------------------------------- scenario editor (compact)
 
 function renderScenario() {
   const sc = state.scenario;
   const o = sc.options;
-  sc.selfReproduction = sc.selfReproduction || { enabled: false, buildGunAdjustable: false, ratio: "10" };
-  const sr = sc.selfReproduction;
-  sc.infrastructure = sc.infrastructure || { enabled: false, channelM: "20", trackFactor: "2", foundationFactor: "2" };
-  const inf = sc.infrastructure;
-  const itemOptions = Object.entries(MODEL.items).map(([, v]) => `<option value="${esc(v.name)}">`).join("");
-  const propRows = Object.entries(sc.proportional.items || {}).map(([id, p]) => `
-    <tr><td>${esc(itemName(id))}</td><td><input data-k="prop" data-id="${id}" value="${esc(p)}" size="7"></td>
-    <td><button class="x" data-del="prop" data-id="${id}" title="remove">×</button></td></tr>`).join("");
-  const exactRows = Object.entries(sc.exact || {}).map(([id, v]) => `
-    <tr><td>${esc(itemName(id))}</td><td><input data-k="exact" data-id="${id}" value="${esc(v)}" size="7"> /min</td>
-    <td><button class="x" data-del="exact" data-id="${id}" title="remove">×</button></td></tr>`).join("");
-  const adjRows = Object.entries(sc.adjustable || {}).map(([id, b]) => `
-    <tr><td>${esc(itemName(id))}</td><td><input data-k="adjmin" data-id="${id}" value="${esc(b.min ?? "0")}" size="4"> –
-    <input data-k="adjmax" data-id="${id}" value="${esc(b.max ?? "")}" size="4" placeholder="∞"></td>
-    <td><button class="x" data-del="adj" data-id="${id}" title="remove">×</button></td></tr>`).join("");
-  const banned = (sc.banned || []).map((id) => {
-    const c = MODEL.columns.find((c) => c.id === id);
-    return `<span class="chip">${esc(c ? c.name : id)} <button class="x" data-unban="${id}">×</button></span>`;
-  }).join(" ") || `<span class="muted">none</span>`;
-  const mins = Object.entries(sc.columnMin || {}).map(([id, v]) => {
-    const c = MODEL.columns.find((c) => c.id === id);
-    return `<span class="chip">${esc(c ? c.name : id)} ≥ <input data-k="colmin" data-id="${id}" value="${esc(v)}" size="4"> machines <button class="x" data-delmin="${id}">×</button></span>`;
-  }).join(" ") || `<span class="muted">none</span>`;
+  sc.selfReproduction = sc.selfReproduction || { enabled: true, buildGunAdjustable: true, ratio: "10" };
+  sc.infrastructure = sc.infrastructure || { enabled: true, channelM: "20", trackFactor: "2", foundationFactor: "2" };
+  const sr = sc.selfReproduction, inf = sc.infrastructure;
+  const row = (kind, id, inner) => `<tr><td>${esc(itemName(id))}</td><td>${inner}</td><td><button class="x" data-del="${kind}" data-id="${id}" title="remove">×</button></td></tr>`;
+  const banned = (sc.banned || []).map((id) => { const c = MODEL.columns.find((c) => c.id === id); return `<span class="chip">${esc(c ? c.name : id)} <button class="x" data-unban="${id}">×</button></span>`; }).join(" ") || `<span class="muted">none</span>`;
   $("#scenario").innerHTML = `
-    <datalist id="items">${itemOptions}</datalist>
-    <div class="preset">Preset:
-      ${Object.entries(PRESETS).map(([k, p]) => `<button data-preset="${k}">${esc(p.label)}</button>`).join(" ")}
-    </div>
+    <datalist id="items">${Object.values(MODEL.items).map((v) => `<option value="${esc(v.name)}">`).join("")}</datalist>
     <div class="grid3">
-      <section>
-        <h3>Proportional <span class="muted">net output = s × p</span></h3>
-        <table class="mini"><tbody>${propRows}</tbody></table>
-        <div class="add"><input list="items" placeholder="add item…" data-add="prop"></div>
-        <label>target scale s <input data-k="scale" value="${esc(sc.proportional.scale)}" size="8"> sets/min</label>
-        <label>band <input data-k="slo" value="${esc(sc.proportional.band[0])}" size="8"> – <input data-k="shi" value="${esc(sc.proportional.band[1])}" size="8"></label>
-      </section>
-      <section>
-        <h3>Exact <span class="muted">net output = e</span></h3>
-        <table class="mini"><tbody>${exactRows}</tbody></table>
-        <div class="add"><input list="items" placeholder="add item…" data-add="exact"></div>
-      </section>
-      <section>
-        <h3>Adjustable <span class="muted">min ≤ net output ≤ max, /min</span></h3>
-        <table class="mini"><tbody>${adjRows}</tbody></table>
-        <div class="add"><input list="items" placeholder="add item…" data-add="adj"></div>
-        <label><input type="checkbox" data-k="sr:buildGunAdjustable" ${sr.buildGunAdjustable ? "checked" : ""}> also every build-gun ingredient (${MODEL.buildGunItems.length} items, min 0)</label>
-        <label><input type="checkbox" data-k="sr:enabled" ${sr.enabled ? "checked" : ""}> self-replacement: build-gun outputs rebuild the factory in
-          <input data-k="sr:ratio" value="${esc(sr.ratio ?? "10")}" size="4"> × the Phase 5 time</label>
-        <p class="small muted">${(() => { try { const s5 = parseQ(sc.proportional.scale); const k = parseQ(sr.ratio || "10"); return `Phase 5 every ${decimalString(div(Q(1n), s5), 4)} min; factory rebuilt every ${decimalString(div(k, s5), 4)} min.`; } catch (e) { return ""; } })()}</p>
-      </section>
+      <section><h3>Proportional</h3>
+        <table class="mini"><tbody>${Object.entries(sc.proportional.items).map(([id, p]) => row("prop", id, `<input data-k="prop" data-id="${id}" value="${esc(p)}" size="6">`)).join("")}</tbody></table>
+        <input list="items" placeholder="add item…" data-add="prop">
+        <label>scale <input data-k="scale" value="${esc(sc.proportional.scale)}" size="8"> sets/min</label></section>
+      <section><h3>Exact</h3>
+        <table class="mini"><tbody>${Object.entries(sc.exact).map(([id, v]) => row("exact", id, `<input data-k="exact" data-id="${id}" value="${esc(v)}" size="6"> /min`)).join("")}</tbody></table>
+        <input list="items" placeholder="add item…" data-add="exact"></section>
+      <section><h3>Soft floors <span class="muted">min /min</span></h3>
+        <table class="mini"><tbody>${Object.entries(sc.adjustable).map(([id, b]) => row("adj", id, `<input data-k="adjmin" data-id="${id}" value="${esc(b.min ?? "0")}" size="5">`)).join("")}</tbody></table>
+        <input list="items" placeholder="add item…" data-add="adj">
+        <label><input type="checkbox" data-k="sr:buildGunAdjustable" ${sr.buildGunAdjustable ? "checked" : ""}> every build-gun ingredient is a soft floor too</label>
+        <label><input type="checkbox" data-k="sr:enabled" ${sr.enabled ? "checked" : ""}> floors cover rebuilding the factory every
+          <input data-k="sr:ratio" value="${esc(sr.ratio)}" size="3"> × the Phase 5 time</label></section>
     </div>
-    <p class="muted small">Every other item, raw resources included, must net exactly zero. Values are exact: type <code>2</code>, <code>12.5</code> or <code>25/6</code>.</p>
-    <details class="opts"><summary>Options, bans and bounds</summary>
+    <details class="opts"><summary>Options and bans</summary>
       <div class="optgrid">
-        <label>Reference extractor <input data-k="opt:extractionUnit" value="${esc(o.extractionUnit)}" size="5"> /min at 100%</label>
-        <label>Default clock decimals <select data-k="decimals">${[0, 1, 2, 3, 4].map((d) => `<option ${d === (sc.decimals ?? 4) ? "selected" : ""}>${d}</option>`).join("")}</select></label>
-        <label>Power boost × <input data-k="opt:powerBoost" value="${esc(o.powerBoost)}" size="5"></label>
-        <label>Extra generation <input data-k="opt:extraMW" value="${esc(o.extraMW)}" size="5"> MW</label>
-        <label>Fixed consumption <input data-k="opt:fixedMW" value="${esc(o.fixedMW)}" size="5"> MW</label>
+        <label>Objective <select data-k="opt:objective"><option value="max" ${(o.objective || "max") === "max" ? "selected" : ""}>largest share of any resource</option><option value="sum" ${o.objective === "sum" ? "selected" : ""}>sum of shares</option></select></label>
+        <label>Mining increment <input data-k="opt:extractionUnit" value="${esc(o.extractionUnit)}" size="4"> /min</label>
+        <label><input type="checkbox" data-k="inf:enabled" ${inf.enabled ? "checked" : ""}> include belts, pipes, rails, foundations, power in the rebuild</label>
+        <label>Belt/pipe per machine stream <input data-k="inf:channelM" value="${esc(inf.channelM)}" size="3"> m</label>
         <label><input type="checkbox" data-k="opt:noMixing" ${o.noMixing ? "checked" : ""}> one recipe per product</label>
-        <label>Max generator recipes outside the nuclear chain <input data-k="opt:maxOtherGenerators" value="${esc(o.maxOtherGenerators)}" size="2"></label>
-        <label><input type="checkbox" data-k="opt:exemptNuclearChain" ${o.exemptNuclearChain ? "checked" : ""}> uranium, plutonium and ficsonium rods don't count</label>
-        <label>Objective <select data-k="opt:objective">
-          <option value="max" ${(o.objective || "max") === "max" ? "selected" : ""}>largest share of any resource (how far out you must expand)</option>
-          <option value="sum" ${o.objective === "sum" ? "selected" : ""}>sum of shares over resources</option></select></label>
-        <label><input type="checkbox" data-k="inf:enabled" ${inf.enabled ? "checked" : ""}> rebuild infrastructure too</label>
-        <label>Belt/pipe per machine stream <input data-k="inf:channelM" value="${esc(inf.channelM)}" size="4"> m, split evenly over tiers</label>
-        <label>Rail track <input data-k="inf:trackFactor" value="${esc(inf.trackFactor)}" size="3"> × one belt tier's length</label>
-        <label>Foundation area <input data-k="inf:foundationFactor" value="${esc(inf.foundationFactor)}" size="3"> × machine footprint</label>
-        <label><input type="checkbox" data-k="opt:excludeConverterToResource" ${o.excludeConverterToResource ? "checked" : ""}> no Converter recipes for mineable resources</label>
+        <label>Generator recipes outside the nuclear chain ≤ <input data-k="opt:maxOtherGenerators" value="${esc(o.maxOtherGenerators)}" size="2"></label>
       </div>
       <p><b>Banned:</b> ${banned}</p>
-      <p><b>Column minimums:</b> ${mins}</p>
     </details>
-    <div class="actions">
-      <button class="primary" id="choose">Choose recipes and solve</button>
-      <button id="export">Export</button>
-      <button id="import">Import</button>
-    </div>
-    <textarea id="io" class="hidden" rows="8" spellcheck="false"></textarea>`;
+    <div class="actions"><button class="primary" id="choose">Choose recipes</button> <button id="reset">Reset to default</button></div>`;
 }
-
-function onScenarioInput(e) {
-  const t = e.target;
-  const sc = state.scenario;
-  const k = t.dataset.k;
+function onScenario(e) {
+  const t = e.target, sc = state.scenario, k = t.dataset.k;
+  if (t.dataset.add && e.type === "change") {
+    const id = nameToItem.get(t.value.trim().toLowerCase());
+    if (!id) return;
+    delete sc.proportional.items[id]; delete sc.exact[id]; delete sc.adjustable[id];
+    if (t.dataset.add === "prop") sc.proportional.items[id] = "1";
+    if (t.dataset.add === "exact") sc.exact[id] = "1";
+    if (t.dataset.add === "adj") sc.adjustable[id] = { min: "1" };
+    save(); renderScenario(); return;
+  }
   if (!k) return;
-  const id = t.dataset.id;
-  const v = t.type === "checkbox" ? t.checked : t.value.trim();
+  const id = t.dataset.id, v = t.type === "checkbox" ? t.checked : t.value.trim();
   if (k === "prop") sc.proportional.items[id] = v;
   else if (k === "exact") sc.exact[id] = v;
   else if (k === "adjmin") sc.adjustable[id].min = v;
-  else if (k === "adjmax") sc.adjustable[id].max = v;
   else if (k === "scale") sc.proportional.scale = v;
-  else if (k === "slo") sc.proportional.band[0] = v;
-  else if (k === "shi") sc.proportional.band[1] = v;
-  else if (k === "colmin") sc.columnMin[id] = v;
-  else if (k === "decimals") sc.decimals = Number(v);
   else if (k.startsWith("sr:")) sc.selfReproduction[k.slice(3)] = v;
   else if (k.startsWith("inf:")) sc.infrastructure[k.slice(4)] = v;
-  else if (k.startsWith("opt:")) {
-    const key = k.slice(4);
-    sc.options[key] = key === "maxOtherGenerators" ? Number(v) : v;
-  }
+  else if (k.startsWith("opt:")) sc.options[k.slice(4)] = k === "opt:maxOtherGenerators" ? Number(v) : v;
   save();
 }
-
 function onScenarioClick(e) {
-  const t = e.target;
-  const sc = state.scenario;
-  if (t.dataset.preset) {
-    state.scenario = PRESETS[t.dataset.preset].make();
-    state.pins = []; state.decimals = {}; state.active = null; state.point = null; S = null; snapResult = null;
-    render();
-    chooseAndAnalyze();
-  } else if (t.dataset.del) {
+  const t = e.target, sc = state.scenario;
+  if (t.dataset.del) {
     const id = t.dataset.id;
     if (t.dataset.del === "prop") delete sc.proportional.items[id];
     if (t.dataset.del === "exact") delete sc.exact[id];
     if (t.dataset.del === "adj") delete sc.adjustable[id];
     save(); renderScenario();
-  } else if (t.dataset.unban) {
-    sc.banned = sc.banned.filter((x) => x !== t.dataset.unban);
-    save(); renderScenario();
-  } else if (t.dataset.delmin) {
-    delete sc.columnMin[t.dataset.delmin];
-    save(); renderScenario();
-  } else if (t.id === "choose") chooseAndAnalyze();
-  else if (t.id === "export") {
-    const io = $("#io");
-    io.classList.remove("hidden");
-    io.value = JSON.stringify({ about: "satisfying-search plan", model_sha256: MODEL.source.data_sha256, ...state, open: undefined }, null, 1);
-    io.select();
-  } else if (t.id === "import") {
-    const io = $("#io");
-    if (io.classList.contains("hidden") || !io.value.trim()) {
-      io.classList.remove("hidden");
-      io.value = "";
-      io.placeholder = "Paste an exported plan here, then press Import again.";
-      return;
-    }
-    try {
-      const s = JSON.parse(io.value);
-      state = { ...state, ...s, open: {} };
-      save(); render();
-      if (state.active) withBusy("Re-solving imported plan…", () => analyzeAndSnap());
-    } catch (err) { setStatus(`Import failed: ${err.message}`, "bad"); }
-  }
-}
-
-function onScenarioChange(e) {
-  const t = e.target;
-  if (t.dataset.add) {
-    const id = nameToItem.get(t.value.trim().toLowerCase());
-    if (!id) return;
-    const sc = state.scenario;
-    delete sc.proportional.items[id]; delete sc.exact[id]; delete sc.adjustable[id];
-    if (t.dataset.add === "prop") sc.proportional.items[id] = "1";
-    if (t.dataset.add === "exact") sc.exact[id] = "1";
-    if (t.dataset.add === "adj") sc.adjustable[id] = { min: "1", max: "" };
-    save(); renderScenario();
-  } else onScenarioInput(e);
+  } else if (t.dataset.unban) { sc.banned = sc.banned.filter((x) => x !== t.dataset.unban); save(); renderScenario(); }
+  else if (t.id === "choose") choose();
+  else if (t.id === "reset") { state.scenario = cloneScenario(DEFAULT_SCENARIO); state.refs = {}; state.locks = {}; save(); renderScenario(); choose(); }
 }
 
 // ---------------------------------------------------------------- results
 
-function render() {
-  renderScenario();
-  renderSummary();
-  renderLevers();
-  renderTable();
-  renderWhy();
+function render() { renderScenario(); renderNet(); renderClusters(); renderLinks(); }
+
+function renderNet() {
+  const el = $("#net");
+  if (!IA) { el.innerHTML = `<p class="muted">Press <b>Choose recipes</b>.</p>`; return; }
+  const xs = XS();
+  const cols = IA.cols;
+  const A = itemRows(cols);
+  const x = cols.map((c) => state.choiceX[c.id] || 0);
+  const tau = reproRate(xs);
+  const netOf = (it) => { let s = 0; for (const [j, v] of A.get(it) || []) s += toNumber(v) * x[j]; return s; };
+  const rebuildOf = (it) => { if (!tau) return 0; let s = 0; cols.forEach((c, j) => { const b = c.buildCost.get(it); if (b) s += toNumber(b) * x[j]; }); return s * toNumber(tau); };
+  const groups = [
+    ["Targets", [...Object.keys(xs.proportional.items), ...Object.keys(xs.exact)]],
+    ["Soft floors you set", Object.keys(xs.adjustable).filter((k) => !xs.adjustable[k].auto)],
+    ["Build-gun ingredients", Object.keys(xs.adjustable).filter((k) => xs.adjustable[k].auto)],
+  ];
+  const shares = cols.filter((c) => c.kind === "extract" && c.worldSupply).map((c) => [c, (state.choiceX[c.id] || 0) * toNumber(c.io.get(c.resource)) / c.worldSupply]).sort((a, b) => b[1] - a[1]);
+  let html = `<p>Map needed: <b>${shares.length ? (100 * shares[0][1]).toFixed(1) : "?"}%</b> of the world's ${shares.length ? esc(itemName(shares[0][0].resource)) : ""}
+    (then ${shares.slice(1, 5).map(([c, f]) => `${esc(itemName(c.resource))} ${(100 * f).toFixed(1)}%`).join(", ")}).
+    ${tau ? `Rebuild time ${decimalString(div(Q(1n), tau), 4)} min.` : ""} These are the continuous optimum's rates, before any rounding.</p><div class="netgrid">`;
+  for (const [title, items] of groups) {
+    const rows = items.filter((it) => A.has(it)).map((it) => {
+      const n = netOf(it), rb = rebuildOf(it);
+      return `<tr><td>${esc(itemName(it))}</td><td class="num">${n.toFixed(3)}</td><td class="num muted">${rb ? rb.toFixed(3) : ""}</td></tr>`;
+    }).join("");
+    html += `<section><h3>${title}</h3><table class="mini wide"><thead><tr><th></th><th class="num">net /min</th><th class="num">rebuild share</th></tr></thead><tbody>${rows}</tbody></table></section>`;
+  }
+  el.innerHTML = html + "</div>";
 }
 
-function renderSummary() {
-  const el = $("#summary");
-  if (!S) { el.innerHTML = `<p class="muted">Press <b>Choose recipes and solve</b>.</p>`; return; }
-  const cols = S.cols;
-  const x = snapResult && snapResult.x;
-  let resUse = 0;
-  if (x) cols.forEach((c, j) => { if (c.kind === "extract" && c.worldSupply) resUse += toNumber(mul(x[j], c.io.get(c.resource))) / c.worldSupply; });
-  const gens = cols.filter((c) => c.kind === "generator");
-  const counted = gens.filter((c) => isGeneratorCounted(c, state.scenario.options));
-  const rows = [];
-  rows.push(["Recipe set", `${cols.filter((c) => c.kind === "recipe").length} recipes, ${gens.length} generator columns, ${cols.filter((c) => c.kind === "extract").length} resources`]);
-  rows.push(["Burning", gens.map((c) => esc(c.name)).join("; ") + ` <span class="muted">(${counted.length} counted against the limit of ${state.scenario.options.maxOtherGenerators})</span>`]);
-  rows.push(["Exact structure", `${S.eqCount} equations of rank ${S.rank} over ${S.n} unknowns → <b>${S.free.length}</b> free parameters (after ${state.pins.length} pin${state.pins.length === 1 ? "" : "s"}); ${S.clusters.filter((c) => c.members.length > 1).length} rigid groups`]);
-  if (!S.lattice.failure && S.lattice.L) rows.push(["Lattice", `index ${S.lattice.L.index().toLocaleString()} in the free coordinates (1 would mean every free choice is legal)`]);
-  if (x) {
-    const shares = cols.map((c, j) => (c.kind === "extract" && c.worldSupply ? [c, toNumber(mul(x[j], c.io.get(c.resource))) / c.worldSupply] : null)).filter(Boolean).sort((a, b) => b[1] - a[1]);
-    rows.push(["Map needed", shares.length ? `largest share: <b>${(100 * shares[0][1]).toFixed(1)}%</b> of the world's ${esc(itemName(shares[0][0].resource))}; then ${shares.slice(1, 4).map(([c, f]) => `${esc(itemName(c.resource))} ${(100 * f).toFixed(1)}%`).join(", ")}` : "—"]);
-    rows.push(["Resource use", `Σ extraction / world supply = ${resUse.toFixed(4)}`]);
-  }
-  let html = `<table class="kv">${rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("")}</table>`;
-  if (S.contradictions.length) {
-    html += `<div class="callout bad"><b>The constraints contradict each other outright</b> (no rational solution): ${S.contradictions.map((c) => c.map(sourceLabel).join(" vs ")).join("; ")}.</div>`;
-  }
-  if (S.lattice.failure) html += renderConflict();
-  if (snapResult && snapResult.violations && snapResult.violations.length) {
-    html += `<div class="callout warn"><b>Nearest exact plan breaks ${snapResult.violations.length} inequality${snapResult.violations.length > 1 ? "ies" : ""}</b>
-      ${snapResult.status === "infeasible" ? "(the solver proved none satisfies them all)" : ""}:
-      <ul>${snapResult.violations.slice(0, 8).map((v) => `<li>${esc(rowName(v.row))}: ${decimalString(v.value, 10)} ${v.side === "below" ? "<" : ">"} ${decimalString(v.bound, 10)}</li>`).join("")}</ul>
-      Usually this means a lever below can only take values far apart; widen a band, add an adjustable product, or change recipes.</div>`;
-  }
-  el.innerHTML = html;
+function memberLabel(j) {
+  const c = IA.cols[j];
+  return `${esc(c.name)} <span class="muted small">${esc(c.building)}</span>`;
 }
-function rowName(r) {
-  if (r.kind === "output") return `output of ${itemName(r.item)}`;
-  return r.name;
-}
-
-function renderConflict() {
-  const f = S.lattice.failure;
-  const cols = S.cols;
-  const conf = S.conflict || [];
-  const rels = conf.length ? relationsAmong(S, conf) : [];
-  const relHtml = rels.map((r) => {
-    const lhs = r.terms.map(([j, w], i) => `${i ? (w < 0n ? " − " : " + ") : (w < 0n ? "−" : "")}${(w < 0n ? -w : w) === 1n ? "" : (w < 0n ? -w : w) + "·"}[${esc(cols[j].name)}]`).join("");
-    const ratio = div(r.constant, r.unit);
-    const contradiction = ratio.d !== 1n;
-    return `<li><code>${lhs} = ${qstr(r.constant)}</code> machine-equivalents.
-      ${contradiction ? `With every clock on its grid the left side is a multiple of ${decimalString(r.unit)}, but the right side is ${qstr(ratio)} of those units — its denominator has the factor ${factorString(nonDecimalPart(ratio.d) > 1n ? nonDecimalPart(ratio.d) : ratio.d)}. <b>No exact plan.</b>` : "Satisfiable on its own; the contradiction is joint with the other relation(s)."}</li>`;
+function relationHtml(rel) {
+  const costs = absorberCost(rel);
+  const lhs = rel.terms.map(([j, w], i) => {
+    const a = w < 0n ? -w : w;
+    return `${i ? (w < 0n ? " − " : " + ") : w < 0n ? "−" : ""}${a === 1n ? "" : `${a}·`}[${esc(IA.cols[j].name)}]`;
   }).join("");
-  const fp = f.progression;
-  let primeHtml = "";
-  if (rels.length && !rels.some((r) => div(r.constant, r.unit).d !== 1n)) {
-    const ob = primeObstruction(S, rels);
-    if (ob) {
-      const lines = ob.rows.map((r, i) => {
-        const terms = [...r.a].filter(([, v]) => v !== 0n).map(([j, v]) => `${v}·k[${esc(cols[j].name)}]`).join(" + ");
-        return `<li><code>${terms || "0"} ≡ ${r.b} (mod ${ob.p})</code></li>`;
-      }).join("");
-      primeHtml = `<p>Each relation is satisfiable alone; together they fail <b>modulo ${ob.p}</b>. Writing each clock as k × its grid step (k an integer), the relations reduce to:</p><ul>${lines}</ul>
-        <p class="small">No integers k satisfy these congruences at once. Every exact plan would need them, so none exists.</p>`;
-    }
-  }
-  return `<div class="callout bad">
-    <b>No exact plan exists.</b> ${esc(cols[f.column].name)} could only take the values ${progStr(fp)} (given the conditions before it), and none of them has at most ${S.decimals[cols[f.column].id]} decimals.
-    ${conf.length ? `<p>A small set of columns that already can't all be on their grids: <b>${conf.map((j) => esc(cols[j].name)).join(", ")}</b>. The balances force:</p><ul>${relHtml}</ul>${primeHtml}` : ""}
-    <p class="small">These relations are exact consequences of the item balances (every other column eliminated); the constants come from the exact rates and pins. See the levers below for which rates would be attainable, or search for a recipe ban that removes the obstruction.</p>
-    <button id="searchBans">${banSearch && banSearch.running ? "Stop search" : "Search recipe bans that fix this"}</button>
-    <div id="banResults">${renderBanResults()}</div>
-  </div>`;
+  const hard = costs.filter((c) => c.hard > 1n).map((c) => `${esc(IA.cols[c.j].name)} (${factorString(c.hard)})`);
+  return `<li><code>${lhs} = 0</code>
+    ${hard.length ? `<div class="small">Adjusted last, these need the rest of the sum divisible by a prime other than 2 or 5: ${hard.join(", ")}. Members with coefficients made only of 2s and 5s absorb any remainder at the cost of a few decimals.</div>` : `<div class="small">Every coefficient is made of 2s and 5s: any member can absorb the remainder.</div>`}</li>`;
 }
 
-function renderBanResults() {
-  if (!banSearch) return "";
-  const rows = banSearch.results.map((r) => `<tr class="${r.feasible ? "ok" : ""}"><td>${esc(r.ban.name)}</td><td>${esc(r.status)}</td><td>${r.objective != null ? r.objective.toFixed(4) : ""}</td>
-    <td>${r.feasible ? `<button data-applyban="${r.ban.id}">ban it</button>` : ""}</td></tr>`).join("");
-  return `<p class="small">${banSearch.running ? `Trying ${banSearch.done}/${banSearch.total}…` : `Tried ${banSearch.results.length} bans.`}</p>
-    <table class="mini"><thead><tr><th>ban</th><th>result</th><th>resource use</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+function renderClusters() {
+  const el = $("#clusters");
+  if (!IA) { el.innerHTML = ""; return; }
+  if (!IA.clusters.length) { el.innerHTML = `<p>No interlocks: every zero-net item has its own producer, so the whole set can be worked top-down.</p>`; return; }
+  el.innerHTML = IA.clusters.map((cl, ci) => {
+    const res = found[ci];
+    const dec = state.clusterDecimals[ci] ?? 1;
+    const js = [...cl.members, ...cl.dependents];
+    const head = res && res.settings.length ? res.settings.map((_, k) => `<th class="num">option ${k + 1}</th>`).join("") : "";
+    const rows = js.map((j) => {
+      const c = IA.cols[j];
+      const isDep = cl.dependents.includes(j);
+      const refStr = state.refs[c.id] ?? "";
+      const ph = (100 * (state.choiceX[c.id] || 0)).toFixed(2);
+      const opts = res && res.settings.length ? res.settings.map((s) => {
+        const v = s.values[res.js.indexOf(j)];
+        return `<td class="num dec-${Math.min(decimalsOf(mul(v, Q(100n))), 4)}">${pct(v)}</td>`;
+      }).join("") : "";
+      return `<tr class="${isDep ? "dep" : ""}"><td>${memberLabel(j)}${isDep ? ' <span class="tag">follows</span>' : ""}</td>
+        <td><input size="8" data-ref="${c.id}" value="${esc(refStr)}" placeholder="${ph}"></td>
+        <td>${isDep ? "" : `<input type="checkbox" data-lock="${c.id}" ${state.locks[c.id] ? "checked" : ""} title="keep this member at its reference value">`}</td>${opts}</tr>`;
+    }).join("");
+    return `<div class="cluster">
+      <h3>Cluster ${ci + 1}: ${cl.members.length} recipes set from above, ${cl.dependents.length} that follow from them</h3>
+      <p class="small">Balances that hold among them in every exact plan (zero-net items between them eliminated):</p>
+      <ul class="rels">${cl.relations.map(relationHtml).join("")}</ul>
+      <div class="finder">
+        <label>Decimals allowed <select data-cdec="${ci}">${[0, 1, 2].map((d) => `<option ${d === dec ? "selected" : ""}>${d}</option>`).join("")}</select></label>
+        <button data-find="${ci}">Find nice settings near the reference</button>
+        ${res && res.impossible ? `<span class="bad">No setting with ${dec} decimals satisfies these balances (with the locks). Allow more decimals or unlock something.</span>` : ""}
+      </div>
+      <div class="scroll"><table class="clocks"><thead><tr><th>Recipe</th><th>reference %</th><th>lock</th>${head}</tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="small muted">Reference: type a total clock (e.g. 92.5×8 → 740), or leave blank for the continuous optimum shown in grey. Options are exact, satisfy every balance above, and are ranked by relative distance from the reference.</p>
+    </div>`;
+  }).join("");
 }
 
-async function runBanSearch() {
-  if (banSearch && banSearch.running) { banSearch.stop = true; return; }
-  banSearch = { running: true, results: [], done: 0, total: 0, stop: false };
-  renderSummary();
-  await searchBans(MODEL, XS(), S, {
-    candidateColumns, chooseRecipes, maxTrials: 30,
-    shouldStop: () => banSearch.stop,
-    onProgress: (i, n, r) => { banSearch.done = i; banSearch.total = n; banSearch.results.push(r); const el = $("#banResults"); if (el) el.innerHTML = renderBanResults(); },
-  });
-  banSearch.running = false;
-  renderSummary();
+function linkFlags(L) {
+  let bad = 1n;
+  for (const t of L.terms) bad = blcm(bad, nonDecimalPart(t.coef.d));
+  return bad;
+}
+function renderLinks() {
+  const el = $("#links");
+  if (!IA) { el.innerHTML = ""; return; }
+  const onlyBad = $("#onlybad") && $("#onlybad").checked;
+  const rows = IA.links.filter((L) => !onlyBad || linkFlags(L) > 1n).map((L) => {
+    const c = IA.cols[L.j];
+    const flag = linkFlags(L);
+    const terms = L.terms.map((t) => {
+      const nd = nonDecimalPart(t.coef.d);
+      return `<span class="${nd > 1n ? "badcoef" : ""}">${t.coef.n < 0n ? "− " : ""}${qstr(t.coef.n < 0n ? Q(-t.coef.n, t.coef.d) : t.coef)}·[${esc(IA.cols[t.j].name)}]</span>`;
+    }).join(" + ").replace(/\+ <span class="([^"]*)">− /g, '− <span class="$1">');
+    return `<tr><td class="num muted">${IA.depth[L.j]}</td><td>${memberLabel(L.j)}</td><td class="small">${esc(itemName(L.item))}</td><td>${terms}</td>
+      <td class="${flag > 1n ? "bad" : "muted"}">${flag > 1n ? factorString(flag) : ""}</td></tr>`;
+  }).join("");
+  el.innerHTML = `<label class="small"><input type="checkbox" id="onlybad" ${onlyBad ? "checked" : ""}> only links with a prime other than 2 or 5</label>
+    <div class="scroll"><table class="clocks"><thead><tr><th>depth</th><th>Recipe</th><th>balances</th><th>= its clock, from its consumers' clocks</th><th>awkward prime</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-function renderLevers() {
-  const el = $("#levers");
-  if (!S) { el.innerHTML = ""; return; }
-  const rows = [];
-  for (const L of S.levers) {
-    const isPct = L.type === "pin" && L.pin.type === "column";
-    const label = L.type === "exact" ? `Exact rate of <b>${esc(itemName(L.item))}</b>` : esc(pinLabel(L.pin));
-    const valStr = isPct ? pct(L.value) : `${decimalString(L.value, 12)}${L.type === "pin" && L.pin.type === "scale" ? " sets/min" : "/min"}`;
-    let att, verdict;
-    if (L.prog) {
-      att = progStr(L.prog, isPct);
-      verdict = L.ok ? `<span class="good">attainable</span>` : `<span class="bad">not attainable</span>; nearest: ${nearestInProg(L.prog, L.value).map((v) => isPct ? pct(v) : decimalString(v, 12)).join(", ")}`;
-    } else {
-      att = "—";
-      verdict = L.relaxedFails ? `<span class="warn">no exact plan even with this one free</span>` : "";
-    }
-    const remove = L.type === "pin" ? `<button class="x" data-unpin="${state.pins.indexOf(L.pin)}" title="remove pin">×</button>` : "";
-    rows.push(`<tr><td>${label}</td><td>${valStr}</td><td>${att}</td><td>${verdict} ${remove}</td></tr>`);
-  }
-  const derived = derivedInfo(XS(), S);
-  const autoItems = new Set(Object.entries(XS().adjustable).filter(([, b]) => b.auto).map(([k]) => k));
-  const autoRows = [];
-  for (const D of derived) {
-    const x = snapResult && snapResult.x;
-    const cur = x ? evalRow({ ell: D.ell }, x) : null;
-    const label = D.type === "scale" ? "Scale <b>s</b> of the proportional set" : `Output of <b>${esc(itemName(D.item))}</b>`;
-    const unit = D.type === "scale" ? " sets/min" : "/min";
-    const pinType = D.type === "scale" ? "scale" : "output";
-    let need = "";
-    if (D.type === "output" && x && reproRate(XS())) {
-      const lo = adjustableLowerRow(S.cols, S.A, D.item, reproRate(XS()));
-      const slack = evalRow({ ell: lo }, x);
-      const share = sub(cur, slack);
-      if (!isZero(share)) need = ` <span class="small muted">(${decimalString(share, 6)} of it rebuilds the factory)</span>`;
-    }
-    const tr = `<tr class="derived"><td>${label}</td><td>${cur ? decimalString(cur, 10) + unit : "—"}${need}</td><td>${progStr(D.prog, false)}</td>
-      <td><input size="9" placeholder="pin to…" data-pinderived="${pinType}" data-item="${D.item || ""}"></td></tr>`;
-    if (D.type === "output" && autoItems.has(D.item)) autoRows.push(tr); else rows.push(tr);
-  }
-  if (autoRows.length) rows.push(`<tr><td colspan="4"><details><summary>${autoRows.length} build-gun ingredients (adjustable, at least their self-reproduction share)</summary>
-    <table class="levers"><tbody>${autoRows.join("")}</tbody></table></details></td></tr>`);
-  el.innerHTML = rows.length ? `<table class="levers"><thead><tr><th>Lever</th><th>Value</th><th>Attainable values (everything else as is)</th><th></th></tr></thead><tbody>${rows.join("")}</tbody></table>
-    <p class="small muted">For an exact rate or a pin, “attainable” means: drop that one constraint, and these are the values it could take in some exact plan (ignoring inequalities). For the scale and the adjustable outputs it is the set of values the current lattice allows. A step like 9/20000 means the value must be a multiple of it — the 9 is the reason.</p>` : "";
-}
-
-function groupOrder() {
-  const groups = new Map();
-  S.cols.forEach((c, j) => {
-    const key = S.param[j].coef.size === 0 ? "fixed" : `c${S.clusterOf[j]}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(j);
-  });
-  const keys = [...groups.keys()].sort((a, b) => {
-    if (a === "fixed") return -1;
-    if (b === "fixed") return 1;
-    return groups.get(b).length - groups.get(a).length;
-  });
-  return keys.map((k) => ({ key: k, members: groups.get(k) }));
-}
-
-function renderTable() {
-  const el = $("#clocks");
-  if (!S) { el.innerHTML = ""; return; }
-  const x = snapResult && snapResult.x && !snapResult.violations.length ? snapResult.x : (snapResult && snapResult.x) || null;
-  const prog = S.lattice.prog;
-  const pinned = new Map(state.pins.filter((p) => p.type === "column").map((p) => [p.id, p]));
-  let html = `<table class="clocks"><thead><tr>
-    <th>Column</th><th class="num">Total clock</th><th title="decimals of the clock in percent">dec</th>
-    <th title="fewest decimals among values this column can take within ±15% of where it is, with everything else free">best ±15%</th>
-    <th class="num" title="this column can only move in multiples of this (everything else free)">step</th>
-    <th title="equal split over n machines with the fewest decimals (display only)">split</th>
-    <th>nice values nearby</th><th>budget</th><th></th></tr></thead><tbody>`;
-  for (const g of groupOrder()) {
-    const m = g.members;
-    let title;
-    if (g.key === "fixed") title = `Fixed: determined by exact rates and pins (${m.length})`;
-    else if (m.length > 1) title = `Rigid group: these ${m.length} move together — choosing one fixes all`;
-    else title = null;
-    if (title) html += `<tr class="group"><td colspan="9">${title}</td></tr>`;
-    else if (!html.includes('class="group indep"')) html += `<tr class="group indep"><td colspan="9">Independent columns (each in a group of its own)</td></tr>`;
-    for (const j of m) html += renderRow(j, x, prog, pinned);
-  }
-  html += "</tbody></table>";
-  el.innerHTML = html;
-}
-
-function renderRow(j, x, prog, pinned) {
-  const c = S.cols[j];
-  const v = x ? x[j] : null;
-  const pr = prog ? prog.get(j) : null;
-  const budget = S.decimals[c.id];
-  const dec = v ? decimalsOf(mul(v, Q(100n))) : null;
-  const fewest = pr && v ? fewestDecimalsNear(pr, v, budget) : null;
-  const pin = pinned.get(c.id);
-  const unit = c.kind === "extract" ? c.io.get(c.resource) : null;
-  const split = v && c.kind !== "extract" ? equalSplit(v, 1) : null;
-  const nice = pr && v && !pin && !isZero(pr.step) ? niceValuesNear(pr, v, budget, { count: 3 }) : [];
-  const name = `${esc(c.name)}${c.alternate ? ' <span class="tag">alt</span>' : ""} <span class="muted small">${esc(c.building)}</span>`;
-  const clock = v ? `${pct(v)}${unit ? `<div class="small muted">${decimalString(mul(v, unit), 10)}/min</div>` : ""}` : "—";
-  const stepStr = pr ? (isZero(pr.step) ? "fixed" : pct(pr.step)) : "—";
-  const niceHtml = nice.map((n) => `<button class="nice ${decClass(n.decimals)}" data-pincol="${c.id}" data-val="${qstr(n.value)}">${pct(n.value)}</button>`).join("");
-  const pinBtn = pin
-    ? `<button class="pin on" data-unpin="${state.pins.indexOf(pin)}" title="unpin">📌</button>`
-    : v ? `<button class="pin" data-pincol="${c.id}" data-val="${qstr(v)}" title="pin at the current value">pin</button>` : "";
-  const budgetSel = `<select data-budget="${c.id}">${[0, 1, 2, 3, 4].map((d) => `<option ${d === budget ? "selected" : ""}>${d}</option>`).join("")}</select>`;
-  const banBtn = c.kind === "recipe" ? `<button class="x" data-ban="${c.id}" title="ban this recipe and choose again">ban</button>` : "";
-  let row = `<tr class="${pin ? "pinned" : ""}" data-row="${c.id}">
-    <td class="name"><a href="#" data-toggle="${c.id}">${name}</a></td>
-    <td class="num">${clock}</td>
-    <td class="${dec != null ? decClass(dec) : ""}">${dec ?? "—"}</td>
-    <td class="${fewest != null ? decClass(fewest) : ""}">${fewest ?? "—"}</td>
-    <td class="num small">${stepStr}</td>
-    <td class="small">${split ? `${split.n} × ${pct(split.clock)}` : ""}</td>
-    <td>${niceHtml}<input class="pinin" size="7" placeholder="%" data-pinin="${c.id}"></td>
-    <td>${budgetSel}</td><td>${pinBtn} ${banBtn}</td></tr>`;
-  if (state.open[c.id]) row += `<tr class="detail"><td colspan="9">${detailHtml(j, v, pr)}</td></tr>`;
-  return row;
-}
-
-function detailHtml(j, v, pr) {
-  const c = S.cols[j];
-  const P = S.param[j];
-  const parts = [];
-  const io = [...c.io].map(([it, r]) => `${toNumber(r) > 0 ? "+" : ""}${decimalString(r, 10)} ${esc(itemName(it))}`).join(", ");
-  parts.push(`<p><b>Per machine at 100%:</b> ${io}${c.kind !== "extract" ? `; ${decimalString(c.power, 6)} MW` : ""}.</p>`);
-  const bad = [...c.io].filter(([, r]) => nonDecimalPart(r.d) > 1n);
-  if (bad.length) parts.push(`<p class="warn">Rates that are not finite decimals: ${bad.map(([it, r]) => `${esc(itemName(it))} ${qstr(r)}`).join(", ")} — any clock of this recipe multiplies them, so its partners inherit the factor ${factorString(nonDecimalPart(bad[0][1].d))}.</p>`);
-  if (P.coef.size === 0) {
-    const contribs = [...P.contrib].map(([s, val]) => `${pct(val)} from the ${esc(sourceLabel(S.sources[s]))}`);
-    parts.push(`<p><b>Fixed.</b> No free parameter moves it: ${contribs.join(" + ") || "it is zero"}.
-      ${pr && decimalsOf(mul(P.x0, Q(100n))) > S.decimals[c.id] ? `Its forced value ${pct(P.x0)} has more decimals than allowed, so this alone makes the plan impossible.` : ""}</p>`);
-  } else {
-    const cl = S.clusters[S.clusterOf[j]];
-    if (cl.members.length > 1) {
-      const lead = S.cols[cl.lead];
-      const r = cl.rel.get(j);
-      const others = cl.members.filter((m) => m !== j).slice(0, 12).map((m) => {
-        const rm = cl.rel.get(m), rj = cl.rel.get(j);
-        // x_m = (alpha_m / alpha_j) (x_j - beta_j) + beta_m
-        const ratio = div(rm.alpha, rj.alpha);
-        const off = sub(rm.beta, mul(ratio, rj.beta));
-        return `[${esc(S.cols[m].name)}] = ${qstr(ratio)} × this${isZero(off) ? "" : ` ${off.n < 0n ? "−" : "+"} ${pct(absq(off))}`}`;
-      });
-      parts.push(`<p><b>Rigid group of ${cl.members.length}.</b> Exact ratios to this column (they hold in every exact plan):</p><ul class="rel">${others.map((o) => `<li><code>${o}</code></li>`).join("")}${cl.members.length > 13 ? "<li>…</li>" : ""}</ul>
-        <p class="small">A ratio p/q whose q has a prime other than 2 or 5 forces this column's clock to carry that prime in its numerator before the partner can be a finite decimal; powers of 2 and 5 only cost decimals.</p>`);
-      void lead; void r;
-    } else parts.push(`<p>Moves independently of every other column (no rigid partner).</p>`);
-    if (pr) parts.push(`<p><b>Attainable values</b> (everything else free, inequalities ignored): ${progStr(pr)}. Fewest decimals possible: ${fewestDecimals(pr, S.decimals[c.id])}.</p>`);
-  }
-  return parts.join("");
-}
-
-function renderWhy() {
-  const el = $("#whylist");
-  if (!S) { el.innerHTML = ""; return; }
-  const items = [];
-  const prog = S.lattice.prog;
-  if (prog) {
-    const x = snapResult && snapResult.x;
-    const awkward = S.cols.map((c, j) => {
-      const pr = prog.get(j);
-      return { c, j, pr, f: fewestDecimals(pr, S.decimals[c.id]), near: x ? fewestDecimalsNear(pr, x[j], S.decimals[c.id]) : null };
-    }).filter((r) => r.f > 0 || r.near > 0).sort((a, b) => (b.f - a.f) || (b.near - a.near));
-    if (awkward.length) {
-      items.push(`<p>These columns <b>cannot be whole-percent</b> with the current recipe set and pins, even if everything else bends (inequalities ignored). “Anywhere” is over all exact plans; “nearby” is within ±15% of the current plan.</p>
-        <div class="scroll"><table class="levers"><thead><tr><th>Column</th><th>Attainable values</th><th>fewest decimals anywhere</th><th>nearby</th></tr></thead><tbody>
-        ${awkward.map((r) => `<tr><td><b>${esc(r.c.name)}</b></td><td class="mono">${progStr(r.pr)}</td><td class="${decClass(r.f)}">${r.f}</td><td class="${r.near != null ? decClass(r.near) : ""}">${r.near ?? "—"}</td></tr>`).join("")}
-        </tbody></table></div>`);
-    } else items.push(`<p>Every column could individually be whole-percent; awkwardness here comes only from <i>combinations</i> (pin one column of a rigid group and see what its partners become).</p>`);
-  }
-  const nd = nonDecimalRates(S.cols);
-  if (nd.length) items.push(`<p>Recipes whose per-minute rates are not finite decimals (they inject primes other than 2 and 5): ${nd.map((r) => `<b>${esc(r.col.name)}</b> (${r.bad.map(([it, v]) => `${esc(itemName(it))} ${qstr(v)}`).join(", ")})`).join("; ")}.</p>`);
-  const ext = state.scenario.options.extractionUnit;
-  items.push(`<p class="small">Extraction is measured in reference extractors of ${esc(ext)}/min. Every miner and well extractor in the game produces a multiple of 30/min at 100%, and 30 = 2·3·5, so every exact ore rate is a multiple of 0.00003/min — a factor 3 hidden in every extraction column.</p>`);
-  el.innerHTML = items.join("");
-}
-
-// ---------------------------------------------------------------- events
-
-function onResultsClick(e) {
-  const t = e.target.closest("button, a");
-  if (!t) return;
-  if (t.dataset.toggle) {
-    e.preventDefault();
-    state.open[t.dataset.toggle] = !state.open[t.dataset.toggle];
-    renderTable();
-  } else if (t.dataset.pincol) addPin({ type: "column", id: t.dataset.pincol, value: t.dataset.val });
-  else if (t.dataset.unpin !== undefined) removePin(Number(t.dataset.unpin));
-  else if (t.dataset.ban) ban(t.dataset.ban);
-  else if (t.dataset.applyban) { banSearch = null; ban(t.dataset.applyban); }
-  else if (t.id === "searchBans") runBanSearch();
+function onResults(e) {
+  const t = e.target;
+  if (t.dataset.find !== undefined) findNice(Number(t.dataset.find));
+  else if (t.id === "onlybad") renderLinks();
 }
 function onResultsChange(e) {
   const t = e.target;
-  if (t.dataset.budget) setBudget(t.dataset.budget, t.value);
-  else if (t.dataset.pinin) {
-    try {
-      const v = div(parseQ(t.value), Q(100n));
-      addPin({ type: "column", id: t.dataset.pinin, value: qstr(v) });
-    } catch (err) { setStatus(err.message, "bad"); }
-  } else if (t.dataset.pinderived) {
-    try {
-      const v = parseQ(t.value);
-      if (t.dataset.pinderived === "scale") addPin({ type: "scale", value: qstr(v) });
-      else addPin({ type: "output", item: t.dataset.item, value: qstr(v) });
-    } catch (err) { setStatus(err.message, "bad"); }
-  }
+  if (t.dataset.ref) { state.refs[t.dataset.ref] = t.value.trim(); save(); }
+  else if (t.dataset.lock) { state.locks[t.dataset.lock] = t.checked; save(); }
+  else if (t.dataset.cdec !== undefined) { state.clusterDecimals[t.dataset.cdec] = Number(t.value); save(); }
 }
 
 async function start() {
   load();
-  $("#scenario").addEventListener("change", onScenarioChange);
+  $("#scenario").addEventListener("change", onScenario);
   $("#scenario").addEventListener("click", onScenarioClick);
-  for (const id of ["#summary", "#levers", "#clocks"]) {
-    $(id).addEventListener("click", onResultsClick);
-    $(id).addEventListener("change", onResultsChange);
-  }
+  for (const id of ["#clusters", "#links"]) { $(id).addEventListener("click", onResults); $(id).addEventListener("change", onResultsChange); }
   $("#source").textContent = `${MODEL.source.data_file} (sha256 ${MODEL.source.data_sha256.slice(0, 12)}…)`;
   render();
-  if (state.active) await withBusy("Restoring your last plan…", () => analyzeAndSnap());
-  else await chooseAndAnalyze();
+  if (state.choiceX) { analyzeSet(); setStatus("Restored your last recipe set.", "good"); }
+  else await choose();
 }
 
 
