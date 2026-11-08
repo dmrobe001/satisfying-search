@@ -24,11 +24,26 @@ export const DEFAULT_SCENARIO = {
     Desc_AlienPowerFuel_C: "5", // Alien Power Augmenter at +30%
   },
   adjustable: {
-    // examples of things you might want on the side; edit freely
-    Desc_Cement_C: { min: "60", max: "120" },
-    Desc_SteelPlate_C: { min: "15", max: "30" },
-    Desc_ModularFrame_C: { min: "5", max: "10" },
+    // equipment, at low rates (per minute); the five favourites a little higher
+    Desc_Filter_C: { min: "1", max: "2" }, // Gas Filter
+    Desc_SpikedRebar_C: { min: "1", max: "2" }, // Iron Rebar
+    Desc_Rebar_Stunshot_C: { min: "1", max: "2" },
+    Desc_Rebar_Spreadshot_C: { min: "1", max: "2" },
+    Desc_Rebar_Explosive_C: { min: "3", max: "6" },
+    Desc_CartridgeStandard_C: { min: "1", max: "2" }, // Rifle Ammo
+    Desc_CartridgeSmartProjectile_C: { min: "3", max: "6" }, // Homing Rifle Ammo
+    Desc_CartridgeChaos_C: { min: "3", max: "6" }, // Turbo Rifle Ammo
+    Desc_NobeliskExplosive_C: { min: "1", max: "2" },
+    Desc_NobeliskShockwave_C: { min: "1", max: "2" }, // Pulse Nobelisk
+    Desc_NobeliskCluster_C: { min: "3", max: "6" },
+    Desc_NobeliskNuke_C: { min: "3", max: "6" },
+    Desc_PackagedRocketFuel_C: { min: "1", max: "2" },
+    Desc_PackagedIonizedFuel_C: { min: "1", max: "2" },
   },
+  // Every build-gun ingredient is adjustable with net output at least what it
+  // takes to rebuild the factory's own machines in T minutes:
+  //   (A x)_k >= (1/T) * sum_j x_j * buildCost_jk   (+ any explicit min)
+  selfReproduction: { enabled: true, buildGunAdjustable: true, T: "28" }, // smallest feasible ~24.9 min, +10%
   options: {
     extractionUnit: "30", // per-minute output of the reference extractor at 100%
     powerBoost: "13/10", // Alien Power Augmenter, fed

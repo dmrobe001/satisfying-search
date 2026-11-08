@@ -11,7 +11,7 @@
 import { Q, ZERO, add, sub, mul, div, neg, cmp, isZero, toNumber, parseQ } from "./rational.js";
 import { pointAt } from "./exact.js";
 import { solveLP, lpNum } from "./solver.js";
-import { powerRow } from "./model.js";
+import { powerRow, reproRate, adjustableLowerRow } from "./model.js";
 
 // linear functionals the inequalities are written in: [{name, ell: Map(j->Q), lo, hi}]
 export function inequalityRows(S, scenario) {
@@ -21,12 +21,13 @@ export function inequalityRows(S, scenario) {
     rows.push({ name: `${c.name} >= ${c.lb ? toNumber(c.lb) : 0}`, kind: "lb", j, ell: new Map([[j, Q(1n)]]), lo: c.lb || ZERO, hi: null });
     if (c.ub) rows.push({ name: `${c.name} <= world supply`, kind: "ub", j, ell: new Map([[j, Q(1n)]]), lo: null, hi: c.ub });
   });
+  const tau = reproRate(scenario);
   for (const [item, band] of Object.entries(scenario.adjustable || {})) {
-    if (!A.has(item)) continue;
-    rows.push({
-      name: `output of ${item}`, kind: "output", item, ell: A.get(item),
-      lo: parseQ(band.min || "0"), hi: band.max !== undefined && band.max !== "" && band.max !== null ? parseQ(band.max) : null,
-    });
+    const lo = adjustableLowerRow(cols, A, item, tau);
+    if (lo.size || !isZero(parseQ(band.min || "0")))
+      rows.push({ name: `output of ${item}`, kind: "output", item, ell: lo, lo: parseQ(band.min || "0"), hi: null, repro: !!tau });
+    if (band.max !== undefined && band.max !== "" && band.max !== null && A.has(item))
+      rows.push({ name: `output of ${item}`, kind: "output", item, ell: A.get(item), lo: null, hi: parseQ(band.max) });
   }
   const prop = scenario.proportional.items || {};
   if (S.ref && A.has(S.ref)) {

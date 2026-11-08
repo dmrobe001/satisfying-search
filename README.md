@@ -25,7 +25,7 @@ means 10^(2+d)·*x* is an integer.
 |---|---|
 | proportional | net output = *s*·*p*ᵢ for one common scale *s* (kept in a band) |
 | exact | net output = *e*ᵢ |
-| adjustable | min ≤ net output ≤ max |
+| adjustable | min ≤ net output ≤ max; for build-gun ingredients, min includes (1/*T*)·(build cost of the factory's machines) |
 | everything else | net output = 0 (raw resources included, after extraction) |
 
 Power is the only inequality row (generation × boost + extra ≥ use + fixed).
@@ -71,16 +71,24 @@ inequality re-checked in exact arithmetic.
 | The snapped plan is the *nearest* legal plan | Up to the solver's gap (1% relative or 0.001 absolute) |
 | Abundance weighting reflects logistics effort | Modelling assumption |
 
-## A finding from the default scenario
+## Findings for the default scenario
 
-With Phase 5 at 3/1000 sets/min, 2 Singularity Cells/min for the Main Portal and
-5 Alien Power Matrices/min for the Augmenter, the recipe set the program chooses has **no
-exact plan at any number of decimals** (the independent oracle agrees). Dropping either
-exact demand alone still leaves no plan. In a variant with 21 adjustable build materials, the
-Singularity Cell rate would have to be a multiple of 9/20000 per minute (2 is not), and
-banning any one of the 40 implicated recipes did not fix it. Removing the two exact demands
-(the second preset) gives an exact plan with 23 free parameters, in which the Phase 5 scale
-can only move in steps of 0.00009 sets/min, so 0.003 itself is not attainable.
+The default scenario has Phase 5 at 3/1000 sets/min, exactly 2 Singularity Cells/min (Main Portal) and
+5 Alien Power Matrices/min (Augmenter), and equipment at low adjustable rates. Every build-gun
+ingredient is adjustable, with net output at least the factory's own machine cost divided by
+the self-reproduction time *T*.
+
+* **Smallest T.** The world supply supports *T* ≈ 24.9 min; the default uses 28 min (10% headroom).
+  Machines are counted as machine-equivalents, so build cost is linear in the rates.
+* **No exact plan with exactly 2 Singularity Cells/min.** The page reduces the obstruction to three
+  congruences modulo 3 in grid units: one forces Synthetic Power Shard's clock ≡ 0, another ≡ 2.
+  The independent oracle agrees.
+* **With Singularity Cells adjustable in 2–2.001/min** (the second preset) there is an exact plan with
+  55 free parameters; the nearest one makes 2.00001 cells/min.
+* **Nuke Nobelisks decouple part of the nuclear chain.** Uranium extraction and the Encased Uranium
+  Cell supply become independent, but the waste-disposal chain stays one rigid group of 11:
+  uranium : plutonium : ficsonium plants = 4/3 : 2 : 1, so a ficsonium plant at exactly 100%
+  forces uranium plants to 133.3…%, which no clock can hit.
 
 ## Layout
 

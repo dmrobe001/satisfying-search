@@ -6,32 +6,25 @@ import {
   decimalsOf, nonDecimalPart, factorString, roundQ,
 } from "./rational.js";
 import { DEFAULT_SCENARIO, cloneScenario } from "./scenario.js";
-import { candidateColumns, chooseRecipes, isGeneratorCounted } from "./model.js";
-import { fewestDecimals, fewestDecimalsNear, niceValuesNear, relationsAmong, gridOf } from "./exact.js";
+import { candidateColumns, chooseRecipes, isGeneratorCounted, expandScenario, minimizeT, reproRate, adjustableLowerRow } from "./model.js";
+import { fewestDecimals, fewestDecimalsNear, niceValuesNear, relationsAmong, gridOf, primeObstruction } from "./exact.js";
 import { snap, inequalityRows, evalRow } from "./snap.js";
 import { fullAnalysis, orderColumns, derivedInfo, equalSplit, nonDecimalRates, searchBans, inProgression } from "./plan.js";
 
-const STORE = "satisfying-search-v1";
+const STORE = "satisfying-search-v2";
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const itemName = (id) => (MODEL.items[id] ? MODEL.items[id].name : id);
 const nameToItem = new Map(Object.entries(MODEL.items).map(([k, v]) => [v.name.toLowerCase(), k]));
 
 const PRESETS = {
-  portal: { label: "Phase 5 + Portal + Augmenter (exact demands)", make: () => cloneScenario(DEFAULT_SCENARIO) },
-  build: {
-    label: "Phase 5 + build materials (no exact demands)",
+  portal: { label: "Phase 5, Portal, Augmenter, equipment, self-reproduction", make: () => cloneScenario(DEFAULT_SCENARIO) },
+  loose: {
+    label: "Same, with Singularity Cells adjustable in 2–2.001/min",
     make: () => {
       const s = cloneScenario(DEFAULT_SCENARIO);
-      s.exact = {};
-      const adj = {
-        Desc_IronPlate_C: 30, Desc_IronRod_C: 30, Desc_Wire_C: 60, Desc_Cable_C: 30, Desc_Cement_C: 60,
-        Desc_IronScrew_C: 60, Desc_IronPlateReinforced_C: 10, Desc_SteelPlate_C: 15, Desc_SteelPipe_C: 15,
-        Desc_CopperSheet_C: 15, Desc_SteelPlateReinforced_C: 6, Desc_ModularFrame_C: 6, Desc_ModularFrameHeavy_C: 2,
-        Desc_Plastic_C: 15, Desc_Rubber_C: 15, Desc_HighSpeedWire_C: 30, Desc_AluminumPlate_C: 10,
-        Desc_AluminumCasing_C: 10, Desc_Computer_C: 2, Desc_Motor_C: 2, Desc_ModularFrameFused_C: 1,
-      };
-      s.adjustable = Object.fromEntries(Object.entries(adj).map(([k, v]) => [k, { min: String(v), max: String(2 * v) }]));
+      delete s.exact.Desc_SingularityCell_C;
+      s.adjustable.Desc_SingularityCell_C = { min: "2", max: "2.001" };
       return s;
     },
   },
@@ -48,6 +41,7 @@ let state = {
   open: {}, // expanded detail rows
 };
 let S = null; // current analysis
+const XS = () => expandScenario(MODEL, state.scenario); // scenario as the engines see it
 let snapResult = null;
 let busy = false;
 let banSearch = null;
@@ -83,9 +77,10 @@ async function withBusy(msg, fn) {
 
 async function chooseAndAnalyze() {
   await withBusy("Choosing recipes (mixed-integer program)…", async () => {
-    const cand = candidateColumns(MODEL, state.scenario);
+    const xs = XS();
+    const cand = candidateColumns(MODEL, xs);
     const t = performance.now();
-    const ch = await chooseRecipes(cand, state.scenario);
+    const ch = await chooseRecipes(cand, xs);
     if (!ch.active.length) {
       state.active = null; S = null; snapResult = null;
       setStatus(`Recipe choice: ${ch.status}. Nothing satisfies the scenario; loosen a band or unban something.`, "bad");
@@ -103,8 +98,26 @@ async function chooseAndAnalyze() {
   });
 }
 
+async function findMinT() {
+  await withBusy("Finding the smallest self-reproduction time…", async () => {
+    const xs = XS();
+    xs.selfReproduction = { ...xs.selfReproduction, enabled: true };
+    const res = await minimizeT(candidateColumns(MODEL, xs), xs, { onProgress: (m) => setStatus(m, "working") });
+    if (res.status !== "ok") { setStatus(`Smallest T: ${res.status}`, "bad"); return; }
+    // round up with 10% headroom to 2 significant figures, so the inequalities keep some slack
+    const t = res.T * 1.1;
+    const mag = 10 ** Math.floor(Math.log10(t) - 1);
+    const T = Math.ceil(t / mag) * mag;
+    state.scenario.selfReproduction = { ...state.scenario.selfReproduction, enabled: true, T: String(T) };
+    state.minTmsg = `smallest feasible T ≈ ${res.T.toFixed(2)} min; set to ${T} (10% headroom)`;
+    save();
+    renderScenario();
+  });
+  await chooseAndAnalyze();
+}
+
 function activeColumns() {
-  const cand = candidateColumns(MODEL, state.scenario);
+  const cand = candidateColumns(MODEL, XS());
   const ids = new Set(state.active || []);
   return orderColumns(cand.filter((c) => ids.has(c.id)));
 }
@@ -113,7 +126,7 @@ async function analyzeAndSnap(fromChoice = false) {
   const cols = activeColumns();
   const decimals = {};
   for (const c of cols) decimals[c.id] = state.decimals[c.id] ?? state.scenario.decimals ?? 4;
-  S = fullAnalysis(cols, state.scenario, state.pins, decimals);
+  S = fullAnalysis(cols, XS(), state.pins, decimals);
   S.decimals = decimals;
   snapResult = null;
   if (S.lattice.failure || S.contradictions.length) {
@@ -124,7 +137,7 @@ async function analyzeAndSnap(fromChoice = false) {
       return state.choiceX ? state.choiceX[c.id] ?? 0 : 0;
     });
     const t = performance.now();
-    snapResult = await snap(S, state.scenario, ref);
+    snapResult = await snap(S, XS(), ref);
     const ms = performance.now() - t;
     if (snapResult.x && snapResult.status !== "infeasible" && !snapResult.violations.length) {
       state.point = Object.fromEntries(cols.map((c, j) => [c.id, qstr(snapResult.x[j])]));
@@ -201,6 +214,8 @@ function decClass(d) {
 function renderScenario() {
   const sc = state.scenario;
   const o = sc.options;
+  sc.selfReproduction = sc.selfReproduction || { enabled: false, buildGunAdjustable: false, T: "1000" };
+  const sr = sc.selfReproduction;
   const itemOptions = Object.entries(MODEL.items).map(([, v]) => `<option value="${esc(v.name)}">`).join("");
   const propRows = Object.entries(sc.proportional.items || {}).map(([id, p]) => `
     <tr><td>${esc(itemName(id))}</td><td><input data-k="prop" data-id="${id}" value="${esc(p)}" size="7"></td>
@@ -242,6 +257,10 @@ function renderScenario() {
         <h3>Adjustable <span class="muted">min ≤ net output ≤ max, /min</span></h3>
         <table class="mini"><tbody>${adjRows}</tbody></table>
         <div class="add"><input list="items" placeholder="add item…" data-add="adj"></div>
+        <label><input type="checkbox" data-k="sr:buildGunAdjustable" ${sr.buildGunAdjustable ? "checked" : ""}> also every build-gun ingredient (${MODEL.buildGunItems.length} items, min 0)</label>
+        <label><input type="checkbox" data-k="sr:enabled" ${sr.enabled ? "checked" : ""}> self-reproduction: build-gun outputs rebuild the factory's machines in
+          <input data-k="sr:T" value="${esc(sr.T)}" size="6"> min</label>
+        <div><button id="minT">Find smallest T</button> <span id="minTmsg" class="small muted">${esc(state.minTmsg || "")}</span></div>
       </section>
     </div>
     <p class="muted small">Every other item, raw resources included, must net exactly zero. Values are exact: type <code>2</code>, <code>12.5</code> or <code>25/6</code>.</p>
@@ -284,6 +303,7 @@ function onScenarioInput(e) {
   else if (k === "shi") sc.proportional.band[1] = v;
   else if (k === "colmin") sc.columnMin[id] = v;
   else if (k === "decimals") sc.decimals = Number(v);
+  else if (k.startsWith("sr:")) sc.selfReproduction[k.slice(3)] = v;
   else if (k.startsWith("opt:")) {
     const key = k.slice(4);
     sc.options[key] = key === "maxOtherGenerators" ? Number(v) : v;
@@ -312,6 +332,7 @@ function onScenarioClick(e) {
     delete sc.columnMin[t.dataset.delmin];
     save(); renderScenario();
   } else if (t.id === "choose") chooseAndAnalyze();
+  else if (t.id === "minT") findMinT();
   else if (t.id === "export") {
     const io = $("#io");
     io.classList.remove("hidden");
@@ -404,9 +425,21 @@ function renderConflict() {
       ${contradiction ? `With every clock on its grid the left side is a multiple of ${decimalString(r.unit)}, but the right side is ${qstr(ratio)} of those units — its denominator has the factor ${factorString(nonDecimalPart(ratio.d) > 1n ? nonDecimalPart(ratio.d) : ratio.d)}. <b>No exact plan.</b>` : "Satisfiable on its own; the contradiction is joint with the other relation(s)."}</li>`;
   }).join("");
   const fp = f.progression;
+  let primeHtml = "";
+  if (rels.length && !rels.some((r) => div(r.constant, r.unit).d !== 1n)) {
+    const ob = primeObstruction(S, rels);
+    if (ob) {
+      const lines = ob.rows.map((r, i) => {
+        const terms = [...r.a].filter(([, v]) => v !== 0n).map(([j, v]) => `${v}·k[${esc(cols[j].name)}]`).join(" + ");
+        return `<li><code>${terms || "0"} ≡ ${r.b} (mod ${ob.p})</code></li>`;
+      }).join("");
+      primeHtml = `<p>Each relation is satisfiable alone; together they fail <b>modulo ${ob.p}</b>. Writing each clock as k × its grid step (k an integer), the relations reduce to:</p><ul>${lines}</ul>
+        <p class="small">No integers k satisfy these congruences at once. Every exact plan would need them, so none exists.</p>`;
+    }
+  }
   return `<div class="callout bad">
     <b>No exact plan exists.</b> ${esc(cols[f.column].name)} could only take the values ${progStr(fp)} (given the conditions before it), and none of them has at most ${S.decimals[cols[f.column].id]} decimals.
-    ${conf.length ? `<p>A small set of columns that already can't all be on their grids: <b>${conf.map((j) => esc(cols[j].name)).join(", ")}</b>. The balances force:</p><ul>${relHtml}</ul>` : ""}
+    ${conf.length ? `<p>A small set of columns that already can't all be on their grids: <b>${conf.map((j) => esc(cols[j].name)).join(", ")}</b>. The balances force:</p><ul>${relHtml}</ul>${primeHtml}` : ""}
     <p class="small">These relations are exact consequences of the item balances (every other column eliminated); the constants come from the exact rates and pins. See the levers below for which rates would be attainable, or search for a recipe ban that removes the obstruction.</p>
     <button id="searchBans">${banSearch && banSearch.running ? "Stop search" : "Search recipe bans that fix this"}</button>
     <div id="banResults">${renderBanResults()}</div>
@@ -425,7 +458,7 @@ async function runBanSearch() {
   if (banSearch && banSearch.running) { banSearch.stop = true; return; }
   banSearch = { running: true, results: [], done: 0, total: 0, stop: false };
   renderSummary();
-  await searchBans(MODEL, state.scenario, S, {
+  await searchBans(MODEL, XS(), S, {
     candidateColumns, chooseRecipes, maxTrials: 30,
     shouldStop: () => banSearch.stop,
     onProgress: (i, n, r) => { banSearch.done = i; banSearch.total = n; banSearch.results.push(r); const el = $("#banResults"); if (el) el.innerHTML = renderBanResults(); },
@@ -453,15 +486,28 @@ function renderLevers() {
     const remove = L.type === "pin" ? `<button class="x" data-unpin="${state.pins.indexOf(L.pin)}" title="remove pin">×</button>` : "";
     rows.push(`<tr><td>${label}</td><td>${valStr}</td><td>${att}</td><td>${verdict} ${remove}</td></tr>`);
   }
-  for (const D of derivedInfo(state.scenario, S)) {
+  const derived = derivedInfo(XS(), S);
+  const autoItems = new Set(Object.entries(XS().adjustable).filter(([, b]) => b.auto).map(([k]) => k));
+  const autoRows = [];
+  for (const D of derived) {
     const x = snapResult && snapResult.x;
     const cur = x ? evalRow({ ell: D.ell }, x) : null;
     const label = D.type === "scale" ? "Scale <b>s</b> of the proportional set" : `Output of <b>${esc(itemName(D.item))}</b>`;
     const unit = D.type === "scale" ? " sets/min" : "/min";
     const pinType = D.type === "scale" ? "scale" : "output";
-    rows.push(`<tr class="derived"><td>${label}</td><td>${cur ? decimalString(cur, 12) + unit : "—"}</td><td>${progStr(D.prog, false)}</td>
-      <td><input size="9" placeholder="pin to…" data-pinderived="${pinType}" data-item="${D.item || ""}"></td></tr>`);
+    let need = "";
+    if (D.type === "output" && x && reproRate(XS())) {
+      const lo = adjustableLowerRow(S.cols, S.A, D.item, reproRate(XS()));
+      const slack = evalRow({ ell: lo }, x);
+      const share = sub(cur, slack);
+      if (!isZero(share)) need = ` <span class="small muted">(${decimalString(share, 6)} of it rebuilds the factory)</span>`;
+    }
+    const tr = `<tr class="derived"><td>${label}</td><td>${cur ? decimalString(cur, 10) + unit : "—"}${need}</td><td>${progStr(D.prog, false)}</td>
+      <td><input size="9" placeholder="pin to…" data-pinderived="${pinType}" data-item="${D.item || ""}"></td></tr>`;
+    if (D.type === "output" && autoItems.has(D.item)) autoRows.push(tr); else rows.push(tr);
   }
+  if (autoRows.length) rows.push(`<tr><td colspan="4"><details><summary>${autoRows.length} build-gun ingredients (adjustable, at least their self-reproduction share)</summary>
+    <table class="levers"><tbody>${autoRows.join("")}</tbody></table></details></td></tr>`);
   el.innerHTML = rows.length ? `<table class="levers"><thead><tr><th>Lever</th><th>Value</th><th>Attainable values (everything else as is)</th><th></th></tr></thead><tbody>${rows.join("")}</tbody></table>
     <p class="small muted">For an exact rate or a pin, “attainable” means: drop that one constraint, and these are the values it could take in some exact plan (ignoring inequalities). For the scale and the adjustable outputs it is the set of values the current lattice allows. A step like 9/20000 means the value must be a multiple of it — the 9 is the reason.</p>` : "";
 }

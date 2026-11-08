@@ -17,7 +17,7 @@
 
 import {
   Q, ZERO, ONE, add, sub, mul, div, neg, isZero, isInt, cmp, eq,
-  bgcd, blcm, babs, bmod, gcdQ, modQ, decimalsOf, parseQ, roundQ,
+  bgcd, blcm, babs, bmod, bmodInverse, gcdQ, modQ, decimalsOf, parseQ, roundQ,
 } from "./rational.js";
 import { AffineLattice } from "./lattice.js";
 
@@ -281,7 +281,9 @@ export function conflictSet(S) {
     chunk = Math.floor(chunk / 2);
   }
   const cols = new Set(set.map((c) => c.j));
-  for (const c of set) c.a.forEach((v, f) => { if (v !== 0n) cols.add(S.free[f]); });
+  // every free coordinate the conditions mention, including those whose
+  // coefficient vanished modulo D: their integrality is still being used
+  for (const c of set) for (const f of S.param[c.j].coef.keys()) cols.add(S.free[f]);
   return [...cols];
 }
 
@@ -425,7 +427,8 @@ export function pointAt(S, u) {
 //   with x_j on its grid the left side is always a multiple of `unit`.
 export function relationsAmong(S, colsSubset) {
   const { param, free } = S;
-  const C = colsSubset;
+  // fixed columns are constants: they go to the right-hand side
+  const C = colsSubset.filter((j) => param[j].coef.size > 0);
   const d = free.length;
   // rows: free coordinates f, columns: members of C  ->  find w with M w = 0
   const rows = [];
@@ -468,4 +471,44 @@ export function relationsAmong(S, colsSubset) {
     out.push({ terms, constant, unit: gcdQ(units) });
   }
   return out;
+}
+
+// Joint contradiction of integer relations, located modulo a small prime p:
+// with every column on its grid (x_j = g_j k_j), solve the relations over Z/p.
+// Returns { p, pivot, residues: [[j, required residue of k_j mod p, relation index]] }
+// for the first prime where they are unsolvable, or null.
+export function primeObstruction(S, rels) {
+  const grid = S.lattice.grid;
+  const primes = [3, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 2, 5];
+  for (const p of primes) {
+    const P = BigInt(p);
+    // rows: coefficients w_j * g_j / u (integers after scaling) and constant / u
+    const rows = rels.map((r) => {
+      const terms = r.terms.map(([j, w]) => [j, mul(Q(w), grid[j])]);
+      let L = r.constant.d;
+      for (const [, t] of terms) L = blcm(L, t.d);
+      return { a: new Map(terms.map(([j, t]) => [j, bmod(t.n * (L / t.d), P)])), b: bmod(r.constant.n * (L / r.constant.d), P) };
+    });
+    // Gaussian elimination mod p
+    const used = [];
+    let bad = null;
+    const work = rows.map((r, i) => ({ a: new Map(r.a), b: r.b, i }));
+    for (const r of work) {
+      for (const u of used) {
+        const c = r.a.get(u.j) || 0n;
+        if (c === 0n) continue;
+        for (const [k, v] of u.a) r.a.set(k, bmod((r.a.get(k) || 0n) - c * v, P));
+        r.b = bmod(r.b - c * u.b, P);
+      }
+      for (const [k, v] of [...r.a]) if (v === 0n) r.a.delete(k);
+      if (!r.a.size) { if (r.b !== 0n) { bad = r; break; } continue; }
+      const [j, v] = r.a.entries().next().value;
+      const inv = bmodInverse(v, P);
+      for (const [k, w] of r.a) r.a.set(k, bmod(w * inv, P));
+      r.b = bmod(r.b * inv, P);
+      used.push({ j, a: r.a, b: r.b, i: r.i });
+    }
+    if (bad) return { p, rows, used };
+  }
+  return null;
 }

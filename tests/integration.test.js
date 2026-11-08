@@ -9,8 +9,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { model } from "./helpers.js";
 import { DEFAULT_SCENARIO, cloneScenario } from "../web/src/scenario.js";
-import { candidateColumns, chooseRecipes, isGeneratorCounted } from "../web/src/model.js";
-import { buildEqualities, relationsAmong } from "../web/src/exact.js";
+import { candidateColumns, chooseRecipes, isGeneratorCounted, expandScenario } from "../web/src/model.js";
+import { buildEqualities, relationsAmong, primeObstruction } from "../web/src/exact.js";
 import { fullAnalysis, orderColumns } from "../web/src/plan.js";
 import { snap } from "../web/src/snap.js";
 import { Q, add, mul, div, eq, isInt } from "../web/src/rational.js";
@@ -24,17 +24,16 @@ function oracle(cols, sc, pins) {
   return execFileSync("python3", ["tools/oracle.py", f, "4"], { encoding: "utf8" }).startsWith("(True");
 }
 
-function buildPreset() {
+function loosePreset() {
   const s = cloneScenario(DEFAULT_SCENARIO);
-  s.exact = {};
-  for (const [k, v] of Object.entries({ Desc_IronPlate_C: 30, Desc_Wire_C: 60, Desc_Cement_C: 60, Desc_SteelPlate_C: 15, Desc_ModularFrame_C: 6, Desc_Plastic_C: 15, Desc_Computer_C: 2 }))
-    s.adjustable[k] = { min: String(v), max: String(2 * v) };
+  delete s.exact.Desc_SingularityCell_C;
+  s.adjustable.Desc_SingularityCell_C = { min: "2", max: "2.001" };
   return s;
 }
 
-for (const [name, make] of [["default (exact demands)", () => cloneScenario(DEFAULT_SCENARIO)], ["build materials", buildPreset]]) {
+for (const [name, make] of [["default scenario", () => cloneScenario(DEFAULT_SCENARIO)], ["singularity cells adjustable", loosePreset]]) {
   test(`${name}: choice obeys the rules, verdict matches oracle, plan is exact`, async () => {
-    const sc = make();
+    const sc = expandScenario(model, make());
     const cand = candidateColumns(model, sc);
     const ch = await chooseRecipes(cand, sc);
     assert.equal(ch.status, "Optimal");
@@ -51,7 +50,7 @@ for (const [name, make] of [["default (exact demands)", () => cloneScenario(DEFA
       // the reported relations really are contradictions
       const rels = relationsAmong(S, S.conflict);
       assert.ok(rels.length > 0);
-      assert.ok(rels.some((r) => !isInt(div(r.constant, r.unit))) || rels.length > 1);
+      assert.ok(rels.some((r) => !isInt(div(r.constant, r.unit))) || primeObstruction(S, rels), "no stated reason for the conflict");
       return;
     }
     const res = await snap(S, sc, cols.map((c) => ch.x.get(c.id)));

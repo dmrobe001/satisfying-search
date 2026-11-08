@@ -21,7 +21,10 @@ export function candidateColumns(model, scenario) {
       io = new Map(Object.entries(c.io).map(([k, v]) => [k, parseQ(v)]));
       power = parseQ(c.powerMW);
     }
-    const col = { ...c, io, power };
+    const bc = c.kind === "extract" ? c.buildCostPerUnitRate : c.buildCost;
+    const scaleBC = c.kind === "extract" ? unit : Q(1n);
+    const buildCost = new Map(Object.entries(bc || {}).map(([k, v]) => [k, mul(parseQ(v), scaleBC)]));
+    const col = { ...c, io, power, buildCost };
     col.lb = scenario.columnMin && scenario.columnMin[c.id] ? parseQ(scenario.columnMin[c.id]) : ZERO;
     col.ub = null;
     if (c.kind === "extract" && c.worldSupply != null) col.ub = divQ(Q(BigInt(c.worldSupply)), unit);
@@ -31,6 +34,41 @@ export function candidateColumns(model, scenario) {
   return out;
 }
 const divQ = (a, b) => Q(a.n * b.d, a.d * b.n);
+
+// The scenario as the engines see it: when `buildGunAdjustable` is on, every
+// build-gun ingredient not already classified becomes adjustable with min 0.
+export function expandScenario(model, scenario) {
+  const sc = JSON.parse(JSON.stringify(scenario));
+  sc.adjustable = sc.adjustable || {};
+  const sr = sc.selfReproduction;
+  if (sr && sr.buildGunAdjustable) {
+    const taken = new Set([...Object.keys(sc.exact || {}), ...Object.keys(sc.proportional.items || {})]);
+    for (const it of model.buildGunItems) {
+      if (!taken.has(it) && !(it in sc.adjustable)) sc.adjustable[it] = { min: "0", max: "", auto: true };
+    }
+  }
+  return sc;
+}
+
+// 1/T if self-reproduction is on, else null
+export function reproRate(scenario) {
+  const sr = scenario.selfReproduction;
+  if (!sr || !sr.enabled || !sr.T) return null;
+  const T = parseQ(sr.T);
+  return isZero(T) ? null : Q(T.d, T.n);
+}
+
+// Lower-bound row of an adjustable item: sum_j (A_kj - b_jk / T) x_j >= min.
+// Returns Map(j -> Q).
+export function adjustableLowerRow(cols, A, item, tau) {
+  const ell = new Map(A.get(item) || []);
+  if (tau) cols.forEach((c, j) => {
+    const b = c.buildCost && c.buildCost.get(item);
+    if (b) ell.set(j, add(ell.get(j) || ZERO, Q(-(b.n * tau.n), b.d * tau.d)));
+  });
+  for (const [j, v] of ell) if (isZero(v)) ell.delete(j);
+  return ell;
+}
 
 export function isGeneratorCounted(col, opt) {
   return col.kind === "generator" && !(opt.exemptNuclearChain && col.nuclearChain);
@@ -72,6 +110,7 @@ export function choiceLP(cols, scenario, { fixedSet = null, bigM = 5000 } = {}) 
   });
   const prop = scenario.proportional.items || {};
   const s = parseQ(scenario.proportional.scale || "0");
+  const tau = reproRate(scenario);
   let r = 0;
   for (const [item, row] of A) {
     const terms = [];
@@ -80,7 +119,10 @@ export function choiceLP(cols, scenario, { fixedSet = null, bigM = 5000 } = {}) 
     const body = terms.join(" ");
     if (scenario.adjustable && item in scenario.adjustable) {
       const { min, max } = scenario.adjustable[item];
-      lines.cons.push(`r${r++}: ${body} >= ${lpNum(toNumber(parseQ(min || "0")))}`);
+      const lo = adjustableLowerRow(cols, A, item, tau);
+      const loTerms = [];
+      for (const [j, v] of lo) if (use[j]) loTerms.push(term(toNumber(v), name(j)));
+      lines.cons.push(`r${r++}: ${loTerms.join(" ") || "0 x0"} >= ${lpNum(toNumber(parseQ(min || "0")))}`);
       if (max !== undefined && max !== null && max !== "") lines.cons.push(`r${r++}: ${body} <= ${lpNum(toNumber(parseQ(max)))}`);
     } else if (item in prop) {
       lines.cons.push(`r${r++}: ${body} = ${lpNum(toNumber(mul(s, parseQ(prop[item]))))}`);
@@ -134,15 +176,22 @@ export function choiceLP(cols, scenario, { fixedSet = null, bigM = 5000 } = {}) 
   }
   const lp = [
     "Minimize",
-    ` obj: ${lines.obj.join(" ") || "0 x0"}`,
+    ` obj: ${wrapLine(lines.obj.join(" ") || "0 x0")}`,
     "Subject To",
-    ...lines.cons.map((l) => ` ${l}`),
+    ...lines.cons.map((l) => ` ${wrapLine(l)}`),
     "Bounds",
     ...lines.bounds.map((l) => ` ${l}`),
     ...(lines.bin.length ? ["Binary", ` ${lines.bin.join(" ")}`] : []),
     "End",
   ].join("\n");
   return lp;
+}
+
+function wrapLine(l) {
+  const t = l.split(" ");
+  const out = [];
+  for (let i = 0; i < t.length; i += 24) out.push(t.slice(i, i + 24).join(" "));
+  return out.join("\n   ");
 }
 
 // Choose recipes: MILP, then re-solve as a plain LP on the chosen set.
@@ -167,4 +216,35 @@ export async function chooseRecipes(cols, scenario, { timeLimit = 60 } = {}) {
     if (v && v.Primal > 1e-9) x.set(c.id, v.Primal);
   });
   return { status: r1.Status, active: [...x.keys()], x, objective: r2.ObjectiveValue, milpObjective: r1.ObjectiveValue };
+}
+
+// Smallest self-reproduction time T the world can support with this scenario.
+// Alternates: recipe choice at T (mixed-integer), then bisection on T with that
+// recipe set fixed (plain linear programs), until a shorter T forces no new set.
+export async function minimizeT(cols, scenario, { onProgress = () => {}, maxRounds = 4 } = {}) {
+  const at = (T) => ({ ...scenario, selfReproduction: { ...scenario.selfReproduction, enabled: true, T: String(T) } });
+  const lpFeasible = async (T, set) => {
+    const r = await solveLP(choiceLP(cols, at(T), { fixedSet: set }), { time_limit: 30 });
+    return r.Status === "Optimal";
+  };
+  let T = Number(scenario.selfReproduction && scenario.selfReproduction.T) || 10000;
+  let ch = await chooseRecipes(cols, at(T));
+  for (let k = 0; !ch.active.length && k < 8; k++) { T *= 4; ch = await chooseRecipes(cols, at(T)); }
+  if (!ch.active.length) return { status: "infeasible even with a very long T" };
+  let best = T;
+  for (let round = 0; round < maxRounds; round++) {
+    const set = new Set(ch.active);
+    let hi = best, lo = best / 1000;
+    if (await lpFeasible(lo, set)) hi = lo;
+    else for (let i = 0; i < 30 && hi / lo > 1.001; i++) {
+      const mid = Math.sqrt(hi * lo);
+      if (await lpFeasible(mid, set)) hi = mid; else lo = mid;
+      onProgress(`round ${round + 1}: T between ${lo.toFixed(1)} and ${hi.toFixed(1)} min`);
+    }
+    best = hi;
+    const trial = await chooseRecipes(cols, at(best * 0.98));
+    if (!trial.active.length) break;
+    ch = trial;
+  }
+  return { status: "ok", T: best };
 }
