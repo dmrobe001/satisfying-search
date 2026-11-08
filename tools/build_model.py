@@ -101,6 +101,18 @@ def main() -> None:
         if i["item"] in automatable and i["item"] not in resources and not items[i["item"]]["liquid"]
     })
 
+    infra = const["infrastructure"]
+
+    def channels(item_list):
+        """distinct item streams into or out of one machine: belts and pipes"""
+        uniq = set(item_list)
+        return {"solid": sum(1 for i in uniq if not items[i]["liquid"]),
+                "fluid": sum(1 for i in uniq if items[i]["liquid"])}
+
+    def footprint(building):
+        w, l = infra["footprint_m"].get(building, [0, 0])
+        return w * l
+
     def cost_of(building, per=Fraction(1)):
         return {k: fstr(v / per) for k, v in sorted(build_cost.get(building, {}).items())}
 
@@ -136,6 +148,8 @@ def main() -> None:
             "powerMW": fstr(power),
             "io": {k: fstr(v) for k, v in sorted(io.items()) if v != 0},
             "buildCost": cost_of(building),
+            "channels": channels([i["item"] for i in r["ingredients"]] + [p["item"] for p in r["products"]]),
+            "footprintM2": footprint(building),
         })
 
     # ---- generators: one column per (generator, fuel)
@@ -162,6 +176,8 @@ def main() -> None:
                 "powerMW": fstr(-P),
                 "io": {k: fstr(v) for k, v in sorted(io.items())},
                 "buildCost": cost_of(gid),
+                "channels": channels(list(io)),
+                "footprintM2": footprint(gid),
             })
 
     # ---- extraction: one column per resource, output scaled in the app
@@ -188,6 +204,15 @@ def main() -> None:
                 c[k] = c.get(k, 0) + 4 * v
             return {k: fstr(v / 600) for k, v in sorted(c.items())}
         return cost_of("Desc_MinerMk3_C", Fraction(600))                 # normal node at 250%
+    def extract_machine(res):
+        """(building, output per machine at 250% on a normal node) for the usual extractor"""
+        if res == "Desc_Water_C":
+            return "Desc_WaterPump_C", 300
+        if res == "Desc_LiquidOil_C":
+            return "Desc_OilPump_C", 300
+        if res == "Desc_NitrogenGas_C":
+            return "Desc_FrackingSmasher_C", 600
+        return "Desc_MinerMk3_C", 600
     supply = const["world_supply_per_min"]["values"]
     for res in sorted(resources):
         columns.append({
@@ -198,6 +223,9 @@ def main() -> None:
             "resource": res,
             "powerMWPerUnitRate": fstr(extractor_power[res]),
             "buildCostPerUnitRate": extract_cost(res),
+            "machinesPerUnitRate": f"1/{extract_machine(res)[1]}",
+            "channels": channels([res]),
+            "footprintM2": footprint(extract_machine(res)[0]),
             "worldSupply": supply.get(res),
         })
 
@@ -215,6 +243,16 @@ def main() -> None:
         },
         "resources": sorted(resources),
         "buildGunItems": build_gun_items,
+        "infrastructure": {
+            "beltTiers": [cost_of(b) for b in infra["belt_tiers"]],
+            "pipeTiers": [cost_of(b) for b in infra["pipe_tiers"]],
+            "rail": cost_of(infra["rail"]),
+            "foundation": cost_of(infra["foundation"]["building"]),
+            "foundationAreaM2": infra["foundation"]["area_m2"],
+            "powerPoles": [cost_of(b) for b in infra["power_poles"]],
+            "powerLine": cost_of(infra["power_line"]),
+            "note": infra["cost_units"],
+        },
         "columns": columns,
         "dropped": dropped,
         "constants": {

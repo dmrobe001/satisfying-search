@@ -106,7 +106,7 @@ export function lllTransform(cols, delta = 0.99) {
 
 // xref: Float64Array-like per column (or null entries). Returns
 // { status, x (exact Q[]), u, violations }
-export async function snap(S, scenario, xref, { timeLimit = 20 } = {}) {
+export async function snap(S, scenario, xref, { timeLimit = 10 } = {}) {
   const lat = S.lattice;
   if (lat.failure) return { status: "no exact plan" };
   const d = lat.d;
@@ -168,8 +168,11 @@ export async function snap(S, scenario, xref, { timeLimit = 20 } = {}) {
       if ((row.lo && cmp(c, row.lo) < 0) || (row.hi && cmp(c, row.hi) > 0)) infeasibleConstant.push(row);
       continue;
     }
-    if (row.lo) cons.push(`c${r++}: ${wrap(t)} >= ${lpNum(toNumber(sub(row.lo, c)))}`);
-    if (row.hi) cons.push(`c${r++}: ${wrap(t)} <= ${lpNum(toNumber(sub(row.hi, c)))}`);
+    // aim slightly inside each bound: the solver's tolerance is about 1e-6,
+    // and the plan is then re-checked exactly
+    const margin = (b) => (globalThis.SNAP_MARGIN ?? 1e-6) * (1 + Math.abs(toNumber(b)));
+    if (row.lo) cons.push(`c${r++}: ${wrap(t)} >= ${lpNum(toNumber(sub(row.lo, c)) + margin(row.lo))}`);
+    if (row.hi) cons.push(`c${r++}: ${wrap(t)} <= ${lpNum(toNumber(sub(row.hi, c)) - margin(row.hi))}`);
   }
   if (infeasibleConstant.length) {
     return { status: "infeasible", reason: infeasibleConstant.map((r) => r.name), x: x0, violations: violations(rows, x0) };
@@ -206,7 +209,12 @@ export async function snap(S, scenario, xref, { timeLimit = 20 } = {}) {
     ` ${wrap(vars)}`,
     "End",
   ].join("\n");
-  const res = await solveLP(lp, { time_limit: timeLimit, mip_rel_gap: 1e-2, mip_abs_gap: 1e-3 });
+  let res;
+  try {
+    res = await solveLP(lp, { time_limit: timeLimit, mip_rel_gap: 1e-2, mip_abs_gap: 1e-3, mip_max_nodes: 20000 });
+  } catch (e) {
+    return { status: `solver error: ${e.message}`, x: x0, violations: violations(rows, x0) };
+  }
   if (!res.Columns || (res.Status !== "Optimal" && res.Status !== "Time limit reached") || res.ObjectiveValue == null) {
     return { status: res.Status === "Infeasible" ? "infeasible" : res.Status, x: x0, violations: violations(rows, x0) };
   }

@@ -171,7 +171,9 @@ footer { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
         <dt>Products</dt>
         <dd><b>Proportional</b>: net outputs equal <i>s</i>·<i>p</i> for one scale <i>s</i> (kept inside its band). <b>Exact</b>: net output equals <i>e</i>. <b>Adjustable</b>: net output anywhere in [min, max]. Every other item nets exactly zero. Power is the one inequality.</dd>
         <dt>Recipe choice</dt>
-        <dd>A mixed-integer program minimises Σ extraction / world supply, with at most one recipe per primary product and at most one generator recipe outside the uranium–plutonium–ficsonium chain. It only picks the set; nothing exact depends on its floating-point answer.</dd>
+        <dd>A mixed-integer program chooses the recipes that need the least of the map: it minimises the largest share of any resource's world supply (how far out you must expand, if each resource's nodes are spread evenly), with the total share as a tie-break. Constraints: Phase 5 at rate <i>s</i>; build-gun ingredients made fast enough to rebuild the factory's machines, belts, pipes, rails, foundations and power lines in <i>k</i>/<i>s</i> minutes; at most one recipe per primary product and one generator recipe outside the uranium–plutonium–ficsonium chain. It only picks the set; nothing exact depends on its floating-point answer.</dd>
+        <dt>Infrastructure estimate</dt>
+        <dd>Each item or fluid stream into or out of a machine counts as a 20 m belt or pipe, split evenly over the belt tiers (Mk.1–6) and pipe tiers (Mk.1–2); rail track is twice one belt tier's length; foundations cover twice the footprint; one power pole and one power line per machine. Footprints are approximate.</dd>
         <dt>The lattice of clocks</dt>
         <dd>With the recipe set fixed, exact elimination writes every rate as an affine function of <i>d</i> free parameters. Requiring every column on its grid cuts that space down to an affine integer lattice, kept in Hermite normal form. Each column then ranges over a progression <i>offset</i> + <i>k</i>·<i>step</i>; the step is the finest move any exact plan allows it.</dd>
         <dt>Rigid groups</dt>

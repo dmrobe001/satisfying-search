@@ -6,7 +6,7 @@ import {
   decimalsOf, nonDecimalPart, factorString, roundQ,
 } from "./rational.js";
 import { DEFAULT_SCENARIO, cloneScenario } from "./scenario.js";
-import { candidateColumns, chooseRecipes, isGeneratorCounted, expandScenario, minimizeT, reproRate, adjustableLowerRow } from "./model.js";
+import { candidateColumns, chooseRecipes, isGeneratorCounted, expandScenario, reproRate, adjustableLowerRow } from "./model.js";
 import { fewestDecimals, fewestDecimalsNear, niceValuesNear, relationsAmong, gridOf, primeObstruction } from "./exact.js";
 import { snap, inequalityRows, evalRow } from "./snap.js";
 import { fullAnalysis, orderColumns, derivedInfo, equalSplit, nonDecimalRates, searchBans, inProgression } from "./plan.js";
@@ -96,24 +96,6 @@ async function chooseAndAnalyze() {
     setStatus(`Chose ${ch.active.length} columns in ${((performance.now() - t) / 1000).toFixed(1)} s.`);
     await analyzeAndSnap(true);
   });
-}
-
-async function findMinT() {
-  await withBusy("Finding the smallest self-reproduction time…", async () => {
-    const xs = XS();
-    xs.selfReproduction = { ...xs.selfReproduction, enabled: true };
-    const res = await minimizeT(candidateColumns(MODEL, xs), xs, { onProgress: (m) => setStatus(m, "working") });
-    if (res.status !== "ok") { setStatus(`Smallest T: ${res.status}`, "bad"); return; }
-    // round up with 10% headroom to 2 significant figures, so the inequalities keep some slack
-    const t = res.T * 1.1;
-    const mag = 10 ** Math.floor(Math.log10(t) - 1);
-    const T = Math.ceil(t / mag) * mag;
-    state.scenario.selfReproduction = { ...state.scenario.selfReproduction, enabled: true, T: String(T) };
-    state.minTmsg = `smallest feasible T ≈ ${res.T.toFixed(2)} min; set to ${T} (10% headroom)`;
-    save();
-    renderScenario();
-  });
-  await chooseAndAnalyze();
 }
 
 function activeColumns() {
@@ -214,8 +196,10 @@ function decClass(d) {
 function renderScenario() {
   const sc = state.scenario;
   const o = sc.options;
-  sc.selfReproduction = sc.selfReproduction || { enabled: false, buildGunAdjustable: false, T: "1000" };
+  sc.selfReproduction = sc.selfReproduction || { enabled: false, buildGunAdjustable: false, ratio: "10" };
   const sr = sc.selfReproduction;
+  sc.infrastructure = sc.infrastructure || { enabled: false, channelM: "20", trackFactor: "2", foundationFactor: "2" };
+  const inf = sc.infrastructure;
   const itemOptions = Object.entries(MODEL.items).map(([, v]) => `<option value="${esc(v.name)}">`).join("");
   const propRows = Object.entries(sc.proportional.items || {}).map(([id, p]) => `
     <tr><td>${esc(itemName(id))}</td><td><input data-k="prop" data-id="${id}" value="${esc(p)}" size="7"></td>
@@ -258,9 +242,9 @@ function renderScenario() {
         <table class="mini"><tbody>${adjRows}</tbody></table>
         <div class="add"><input list="items" placeholder="add item…" data-add="adj"></div>
         <label><input type="checkbox" data-k="sr:buildGunAdjustable" ${sr.buildGunAdjustable ? "checked" : ""}> also every build-gun ingredient (${MODEL.buildGunItems.length} items, min 0)</label>
-        <label><input type="checkbox" data-k="sr:enabled" ${sr.enabled ? "checked" : ""}> self-reproduction: build-gun outputs rebuild the factory's machines in
-          <input data-k="sr:T" value="${esc(sr.T)}" size="6"> min</label>
-        <div><button id="minT">Find smallest T</button> <span id="minTmsg" class="small muted">${esc(state.minTmsg || "")}</span></div>
+        <label><input type="checkbox" data-k="sr:enabled" ${sr.enabled ? "checked" : ""}> self-replacement: build-gun outputs rebuild the factory in
+          <input data-k="sr:ratio" value="${esc(sr.ratio ?? "10")}" size="4"> × the Phase 5 time</label>
+        <p class="small muted">${(() => { try { const s5 = parseQ(sc.proportional.scale); const k = parseQ(sr.ratio || "10"); return `Phase 5 every ${decimalString(div(Q(1n), s5), 4)} min; factory rebuilt every ${decimalString(div(k, s5), 4)} min.`; } catch (e) { return ""; } })()}</p>
       </section>
     </div>
     <p class="muted small">Every other item, raw resources included, must net exactly zero. Values are exact: type <code>2</code>, <code>12.5</code> or <code>25/6</code>.</p>
@@ -274,6 +258,13 @@ function renderScenario() {
         <label><input type="checkbox" data-k="opt:noMixing" ${o.noMixing ? "checked" : ""}> one recipe per product</label>
         <label>Max generator recipes outside the nuclear chain <input data-k="opt:maxOtherGenerators" value="${esc(o.maxOtherGenerators)}" size="2"></label>
         <label><input type="checkbox" data-k="opt:exemptNuclearChain" ${o.exemptNuclearChain ? "checked" : ""}> uranium, plutonium and ficsonium rods don't count</label>
+        <label>Objective <select data-k="opt:objective">
+          <option value="max" ${(o.objective || "max") === "max" ? "selected" : ""}>largest share of any resource (how far out you must expand)</option>
+          <option value="sum" ${o.objective === "sum" ? "selected" : ""}>sum of shares over resources</option></select></label>
+        <label><input type="checkbox" data-k="inf:enabled" ${inf.enabled ? "checked" : ""}> rebuild infrastructure too</label>
+        <label>Belt/pipe per machine stream <input data-k="inf:channelM" value="${esc(inf.channelM)}" size="4"> m, split evenly over tiers</label>
+        <label>Rail track <input data-k="inf:trackFactor" value="${esc(inf.trackFactor)}" size="3"> × one belt tier's length</label>
+        <label>Foundation area <input data-k="inf:foundationFactor" value="${esc(inf.foundationFactor)}" size="3"> × machine footprint</label>
         <label><input type="checkbox" data-k="opt:excludeConverterToResource" ${o.excludeConverterToResource ? "checked" : ""}> no Converter recipes for mineable resources</label>
       </div>
       <p><b>Banned:</b> ${banned}</p>
@@ -304,6 +295,7 @@ function onScenarioInput(e) {
   else if (k === "colmin") sc.columnMin[id] = v;
   else if (k === "decimals") sc.decimals = Number(v);
   else if (k.startsWith("sr:")) sc.selfReproduction[k.slice(3)] = v;
+  else if (k.startsWith("inf:")) sc.infrastructure[k.slice(4)] = v;
   else if (k.startsWith("opt:")) {
     const key = k.slice(4);
     sc.options[key] = key === "maxOtherGenerators" ? Number(v) : v;
@@ -332,7 +324,6 @@ function onScenarioClick(e) {
     delete sc.columnMin[t.dataset.delmin];
     save(); renderScenario();
   } else if (t.id === "choose") chooseAndAnalyze();
-  else if (t.id === "minT") findMinT();
   else if (t.id === "export") {
     const io = $("#io");
     io.classList.remove("hidden");
@@ -393,7 +384,11 @@ function renderSummary() {
   rows.push(["Burning", gens.map((c) => esc(c.name)).join("; ") + ` <span class="muted">(${counted.length} counted against the limit of ${state.scenario.options.maxOtherGenerators})</span>`]);
   rows.push(["Exact structure", `${S.eqCount} equations of rank ${S.rank} over ${S.n} unknowns → <b>${S.free.length}</b> free parameters (after ${state.pins.length} pin${state.pins.length === 1 ? "" : "s"}); ${S.clusters.filter((c) => c.members.length > 1).length} rigid groups`]);
   if (!S.lattice.failure && S.lattice.L) rows.push(["Lattice", `index ${S.lattice.L.index().toLocaleString()} in the free coordinates (1 would mean every free choice is legal)`]);
-  if (x) rows.push(["Resource use", `Σ extraction / world supply = ${resUse.toFixed(4)} <span class="muted">(recipe choice optimum ${state.objective != null ? state.objective.toFixed(4) : "?"})</span>`]);
+  if (x) {
+    const shares = cols.map((c, j) => (c.kind === "extract" && c.worldSupply ? [c, toNumber(mul(x[j], c.io.get(c.resource))) / c.worldSupply] : null)).filter(Boolean).sort((a, b) => b[1] - a[1]);
+    rows.push(["Map needed", shares.length ? `largest share: <b>${(100 * shares[0][1]).toFixed(1)}%</b> of the world's ${esc(itemName(shares[0][0].resource))}; then ${shares.slice(1, 4).map(([c, f]) => `${esc(itemName(c.resource))} ${(100 * f).toFixed(1)}%`).join(", ")}` : "—"]);
+    rows.push(["Resource use", `Σ extraction / world supply = ${resUse.toFixed(4)}`]);
+  }
   let html = `<table class="kv">${rows.map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join("")}</table>`;
   if (S.contradictions.length) {
     html += `<div class="callout bad"><b>The constraints contradict each other outright</b> (no rational solution): ${S.contradictions.map((c) => c.map(sourceLabel).join(" vs ")).join("; ")}.</div>`;

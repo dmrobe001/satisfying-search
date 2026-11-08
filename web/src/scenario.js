@@ -41,9 +41,11 @@ export const DEFAULT_SCENARIO = {
     Desc_PackagedIonizedFuel_C: { min: "1", max: "2" },
   },
   // Every build-gun ingredient is adjustable with net output at least what it
-  // takes to rebuild the factory's own machines in T minutes:
-  //   (A x)_k >= (1/T) * sum_j x_j * buildCost_jk   (+ any explicit min)
-  selfReproduction: { enabled: true, buildGunAdjustable: true, T: "28" }, // smallest feasible ~24.9 min, +10%
+  // takes to rebuild the factory (machines + infrastructure) in `ratio` times
+  // the Phase 5 time:  (A x)_k >= (s / ratio) * sum_j x_j * buildCost_jk  (+ min)
+  selfReproduction: { enabled: true, buildGunAdjustable: true, ratio: "10" },
+  // belts, pipes, rails, foundations, power per machine (see model.js)
+  infrastructure: { enabled: true, channelM: "20", trackFactor: "2", foundationFactor: "2" },
   options: {
     extractionUnit: "30", // per-minute output of the reference extractor at 100%
     powerBoost: "13/10", // Alien Power Augmenter, fed
@@ -53,6 +55,7 @@ export const DEFAULT_SCENARIO = {
     maxOtherGenerators: 1, // generator+fuel columns outside the nuclear chain
     exemptNuclearChain: true, // uranium, plutonium and ficsonium rods don't count
     excludeConverterToResource: true,
+    objective: "max", // "max": largest share of any resource's world supply; "sum": total share
   },
   columnMin: {
     "Gen:Desc_GeneratorNuclear_C:Desc_FicsoniumFuelRod_C": "1",

@@ -25,13 +25,14 @@ means 10^(2+d)·*x* is an integer.
 |---|---|
 | proportional | net output = *s*·*p*ᵢ for one common scale *s* (kept in a band) |
 | exact | net output = *e*ᵢ |
-| adjustable | min ≤ net output ≤ max; for build-gun ingredients, min includes (1/*T*)·(build cost of the factory's machines) |
+| adjustable | min ≤ net output ≤ max; for build-gun ingredients, min includes (*s*/*k*)·(build cost of the factory's machines and infrastructure) |
 | everything else | net output = 0 (raw resources included, after extraction) |
 
 Power is the only inequality row (generation × boost + extra ≥ use + fixed).
 
-**Recipe choice.** A mixed-integer linear program (solved with HiGHS) minimises
-Σ extraction / world supply, with at most one recipe per primary product and at most one
+**Recipe choice.** A mixed-integer linear program (solved with HiGHS) minimises the
+largest share of any resource's world supply (the sum is the tie-break, or the objective if
+you choose it), with at most one recipe per primary product and at most one
 generator recipe outside the uranium → plutonium → ficsonium chain. It only chooses the set;
 nothing exact depends on its floating-point answer.
 
@@ -73,22 +74,25 @@ inequality re-checked in exact arithmetic.
 
 ## Findings for the default scenario
 
-The default scenario has Phase 5 at 3/1000 sets/min, exactly 2 Singularity Cells/min (Main Portal) and
-5 Alien Power Matrices/min (Augmenter), and equipment at low adjustable rates. Every build-gun
-ingredient is adjustable, with net output at least the factory's own machine cost divided by
-the self-reproduction time *T*.
+The default scenario has these inputs:
+- **Phase 5** at 3/1000 sets/min, so one Phase 5 every 333⅓ min.
+- **Exact demands:** 2 Singularity Cells/min (Main Portal) and 5 Alien Power Matrices/min (Augmenter).
+- **Equipment** at low adjustable rates.
+- **Self-replacement:** every build-gun ingredient is adjustable, with net output at least
+  the factory's rebuild cost (machines plus estimated infrastructure) per 10 Phase 5 times
+  (3333⅓ min).
 
-* **Smallest T.** The world supply supports *T* ≈ 24.9 min; the default uses 28 min (10% headroom).
-  Machines are counted as machine-equivalents, so build cost is linear in the rates.
-* **No exact plan with exactly 2 Singularity Cells/min.** The page reduces the obstruction to three
-  congruences modulo 3 in grid units: one forces Synthetic Power Shard's clock ≡ 0, another ≡ 2.
-  The independent oracle agrees.
-* **With Singularity Cells adjustable in 2–2.001/min** (the second preset) there is an exact plan with
-  55 free parameters; the nearest one makes 2.00001 cells/min.
-* **Nuke Nobelisks decouple part of the nuclear chain.** Uranium extraction and the Encased Uranium
-  Cell supply become independent, but the waste-disposal chain stays one rigid group of 11:
-  uranium : plutonium : ficsonium plants = 4/3 : 2 : 1, so a ficsonium plant at exactly 100%
-  forces uranium plants to 133.3…%, which no clock can hit.
+The results:
+- **Map needed.** The recipe choice minimises the largest share of any resource's world supply.
+  The optimum spreads the load: SAM 9.1%, Bauxite 9.0%, Raw Quartz 8.8%, Coal 8.7%.
+- **No exact plan with exactly 2 Singularity Cells/min.** The page reduces the obstruction to
+  congruences modulo 3 in grid units. Synthetic Power Shard's clock would have to be both
+  ≡ 0 and ≡ 2 (mod 3). The independent oracle agrees.
+- **With Singularity Cells adjustable in 2–2.001/min** (the second preset) there is an exact plan
+  with 53 free parameters that satisfies every inequality.
+- **The nuclear waste chain stays rigid.** Nuke Nobelisks decouple uranium extraction and the
+  Encased Uranium Cell supply. The waste-disposal chain is still one group:
+  uranium : plutonium : ficsonium plants = 4/3 : 2 : 1.
 
 ## Layout
 

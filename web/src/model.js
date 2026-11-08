@@ -9,6 +9,7 @@ export function candidateColumns(model, scenario) {
   const opt = scenario.options;
   const unit = parseQ(opt.extractionUnit);
   const banned = new Set(scenario.banned || []);
+  const infra = infrastructureModel(model, scenario);
   const out = [];
   for (const c of model.columns) {
     if (banned.has(c.id)) continue;
@@ -24,7 +25,18 @@ export function candidateColumns(model, scenario) {
     const bc = c.kind === "extract" ? c.buildCostPerUnitRate : c.buildCost;
     const scaleBC = c.kind === "extract" ? unit : Q(1n);
     const buildCost = new Map(Object.entries(bc || {}).map(([k, v]) => [k, mul(parseQ(v), scaleBC)]));
-    const col = { ...c, io, power, buildCost };
+    // belts, pipes, rails, foundations and power, per machine, then per unit of this column
+    const infraCost = new Map();
+    if (infra) {
+      const perMachine = infra(c);
+      const machines = c.kind === "extract" ? mul(parseQ(c.machinesPerUnitRate), unit) : Q(1n);
+      for (const [k, v] of perMachine) {
+        const t = mul(v, machines);
+        infraCost.set(k, t);
+        buildCost.set(k, add(buildCost.get(k) || ZERO, t));
+      }
+    }
+    const col = { ...c, io, power, buildCost, infraCost };
     col.lb = scenario.columnMin && scenario.columnMin[c.id] ? parseQ(scenario.columnMin[c.id]) : ZERO;
     col.ub = null;
     if (c.kind === "extract" && c.worldSupply != null) col.ub = divQ(Q(BigInt(c.worldSupply)), unit);
@@ -34,6 +46,37 @@ export function candidateColumns(model, scenario) {
   return out;
 }
 const divQ = (a, b) => Q(a.n * b.d, a.d * b.n);
+
+// Infrastructure per machine, from the number of item and fluid streams it has:
+//   each stream is a belt or pipe of `channelM` metres; belt length is split
+//   evenly over the belt tiers, pipe length over the pipe tiers; rail track is
+//   `trackFactor` times one belt tier's length; foundations cover the
+//   footprint times `foundationFactor`; one power pole (tiers split evenly)
+//   and one power line per machine.
+export function infrastructureModel(model, scenario) {
+  const p = scenario.infrastructure;
+  const I = model.infrastructure;
+  if (!p || !p.enabled || !I) return null;
+  const L = parseQ(p.channelM || "20"), track = parseQ(p.trackFactor || "2"), found = parseQ(p.foundationFactor || "2");
+  const addCost = (out, cost, times) => {
+    if (isZero(times)) return;
+    for (const [k, v] of Object.entries(cost)) out.set(k, add(out.get(k) || ZERO, mul(parseQ(v), times)));
+  };
+  return (c) => {
+    const out = new Map();
+    const ch = c.channels || { solid: 0, fluid: 0 };
+    const beltLen = mul(L, Q(BigInt(ch.solid)));
+    const pipeLen = mul(L, Q(BigInt(ch.fluid)));
+    const perBeltTier = divQ(beltLen, Q(BigInt(I.beltTiers.length)));
+    for (const t of I.beltTiers) addCost(out, t, perBeltTier);
+    for (const t of I.pipeTiers) addCost(out, t, divQ(pipeLen, Q(BigInt(I.pipeTiers.length))));
+    addCost(out, I.rail, mul(track, perBeltTier));
+    addCost(out, I.foundation, divQ(mul(parseQ(String(c.footprintM2 || 0)), found), Q(BigInt(I.foundationAreaM2))));
+    for (const t of I.powerPoles) addCost(out, t, Q(1n, BigInt(I.powerPoles.length)));
+    addCost(out, I.powerLine, Q(1n));
+    return out;
+  };
+}
 
 // The scenario as the engines see it: when `buildGunAdjustable` is on, every
 // build-gun ingredient not already classified becomes adjustable with min 0.
@@ -51,11 +94,14 @@ export function expandScenario(model, scenario) {
 }
 
 // 1/T if self-reproduction is on, else null
+// Self-replacement runs k times slower than Phase 5: one Phase 5 takes 1/s
+// minutes, rebuilding the factory takes k/s, so the rate is s/k.
 export function reproRate(scenario) {
   const sr = scenario.selfReproduction;
-  if (!sr || !sr.enabled || !sr.T) return null;
-  const T = parseQ(sr.T);
-  return isZero(T) ? null : Q(T.d, T.n);
+  if (!sr || !sr.enabled || !sr.ratio) return null;
+  const k = parseQ(sr.ratio), sc = parseQ(scenario.proportional.scale || "0");
+  if (isZero(k) || isZero(sc)) return null;
+  return divQ(sc, k);
 }
 
 // Lower-bound row of an adjustable item: sum_j (A_kj - b_jk / T) x_j >= min.
@@ -103,11 +149,15 @@ export function choiceLP(cols, scenario, { fixedSet = null, bigM = 5000 } = {}) 
   const lines = { obj: [], cons: [], bounds: [], bin: [] };
   // objective: abundance-weighted resource use, plus a tiny power tie-break
   const term = (coef, v) => `${coef >= 0 ? "+" : "-"} ${lpNum(Math.abs(coef))} ${v}`;
+  const minimax = (scenario.options.objective || "max") === "max";
   cols.forEach((c, j) => {
     if (!use[j]) return;
-    const w = c.weight + 1e-9 * Math.abs(toNumber(c.power));
+    // the largest share sets the objective; the sum (scaled down) breaks ties
+    const w = (minimax ? 1e-3 : 1) * c.weight + 1e-9 * Math.abs(toNumber(c.power));
     if (w) lines.obj.push(term(w, name(j)));
+    if (minimax && c.weight) lines.cons.push(`share${j}: ${term(c.weight, name(j))} - z <= 0`);
   });
+  if (minimax) lines.obj.push("+ 1 z");
   const prop = scenario.proportional.items || {};
   const s = parseQ(scenario.proportional.scale || "0");
   const tau = reproRate(scenario);
@@ -218,33 +268,3 @@ export async function chooseRecipes(cols, scenario, { timeLimit = 60 } = {}) {
   return { status: r1.Status, active: [...x.keys()], x, objective: r2.ObjectiveValue, milpObjective: r1.ObjectiveValue };
 }
 
-// Smallest self-reproduction time T the world can support with this scenario.
-// Alternates: recipe choice at T (mixed-integer), then bisection on T with that
-// recipe set fixed (plain linear programs), until a shorter T forces no new set.
-export async function minimizeT(cols, scenario, { onProgress = () => {}, maxRounds = 4 } = {}) {
-  const at = (T) => ({ ...scenario, selfReproduction: { ...scenario.selfReproduction, enabled: true, T: String(T) } });
-  const lpFeasible = async (T, set) => {
-    const r = await solveLP(choiceLP(cols, at(T), { fixedSet: set }), { time_limit: 30 });
-    return r.Status === "Optimal";
-  };
-  let T = Number(scenario.selfReproduction && scenario.selfReproduction.T) || 10000;
-  let ch = await chooseRecipes(cols, at(T));
-  for (let k = 0; !ch.active.length && k < 8; k++) { T *= 4; ch = await chooseRecipes(cols, at(T)); }
-  if (!ch.active.length) return { status: "infeasible even with a very long T" };
-  let best = T;
-  for (let round = 0; round < maxRounds; round++) {
-    const set = new Set(ch.active);
-    let hi = best, lo = best / 1000;
-    if (await lpFeasible(lo, set)) hi = lo;
-    else for (let i = 0; i < 30 && hi / lo > 1.001; i++) {
-      const mid = Math.sqrt(hi * lo);
-      if (await lpFeasible(mid, set)) hi = mid; else lo = mid;
-      onProgress(`round ${round + 1}: T between ${lo.toFixed(1)} and ${hi.toFixed(1)} min`);
-    }
-    best = hi;
-    const trial = await chooseRecipes(cols, at(best * 0.98));
-    if (!trial.active.length) break;
-    ch = trial;
-  }
-  return { status: "ok", T: best };
-}

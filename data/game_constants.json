@@ -76,5 +76,106 @@
   "resource_well_pressurizer_output_assumed_per_min_at_250pct": 600,
   "biomass_burner": "excluded (fuel not automatable)",
   "converter_recipes_excluded": "those whose product can be mined directly"
+ },
+ "infrastructure": {
+  "_about": "Inputs for estimating belts, pipes, rails, foundations and power per machine. Footprints are approximate (from memory of satisfactory.wiki.gg building pages) and NOT verified against the game; edit freely.",
+  "footprint_m": {
+   "Desc_ConstructorMk1_C": [
+    8,
+    10
+   ],
+   "Desc_SmelterMk1_C": [
+    6,
+    9
+   ],
+   "Desc_FoundryMk1_C": [
+    10,
+    9
+   ],
+   "Desc_AssemblerMk1_C": [
+    10,
+    15
+   ],
+   "Desc_ManufacturerMk1_C": [
+    18,
+    20
+   ],
+   "Desc_OilRefinery_C": [
+    10,
+    20
+   ],
+   "Desc_Packager_C": [
+    8,
+    8
+   ],
+   "Desc_Blender_C": [
+    18,
+    16
+   ],
+   "Desc_HadronCollider_C": [
+    24,
+    38
+   ],
+   "Desc_Converter_C": [
+    16,
+    16
+   ],
+   "Desc_QuantumEncoder_C": [
+    22,
+    48
+   ],
+   "Desc_GeneratorCoal_C": [
+    10,
+    26
+   ],
+   "Desc_GeneratorFuel_C": [
+    20,
+    20
+   ],
+   "Desc_GeneratorNuclear_C": [
+    36,
+    43
+   ],
+   "Desc_MinerMk3_C": [
+    6,
+    14
+   ],
+   "Desc_WaterPump_C": [
+    20,
+    20
+   ],
+   "Desc_OilPump_C": [
+    8,
+    14
+   ],
+   "Desc_FrackingSmasher_C": [
+    20,
+    20
+   ]
+  },
+  "belt_tiers": [
+   "Desc_ConveyorBeltMk1_C",
+   "Desc_ConveyorBeltMk2_C",
+   "Desc_ConveyorBeltMk3_C",
+   "Desc_ConveyorBeltMk4_C",
+   "Desc_ConveyorBeltMk5_C",
+   "Desc_ConveyorBeltMk6_C"
+  ],
+  "pipe_tiers": [
+   "Desc_Pipeline_C",
+   "Desc_PipelineMK2_C"
+  ],
+  "rail": "Desc_RailroadTrack_C",
+  "foundation": {
+   "building": "Desc_Foundation_8x1_01_C",
+   "area_m2": 64
+  },
+  "power_poles": [
+   "Desc_PowerPoleMk1_C",
+   "Desc_PowerPoleMk2_C",
+   "Desc_PowerPoleMk3_C"
+  ],
+  "power_line": "Desc_PowerLine_C",
+  "cost_units": "Belt, pipe and rail build costs in the data file are taken as per metre; one power line per machine."
  }
 }
